@@ -290,16 +290,18 @@ impl EnvelopeService {
                 activity_type: existing.activity_type.clone(),
                 subtype: existing.subtype.clone(),
                 activity_date: existing.activity_date.to_rfc3339(),
-                quantity: None,
-                unit_price: None,
+                // Every scalar is restated from the stored row: an omitted
+                // field is not "keep", so sending None would blank it.
+                quantity: Some(existing.quantity),
+                unit_price: Some(existing.unit_price),
                 currency: existing.currency.clone(),
-                fee: None,
-                tax: None,
-                amount: None,
-                status: None,
-                needs_review: None,
-                notes: None,
-                fx_rate: None,
+                fee: Some(existing.fee),
+                tax: Some(existing.tax),
+                amount: Some(existing.amount),
+                status: Some(existing.status.clone()),
+                needs_review: Some(existing.needs_review),
+                notes: existing.notes.clone(),
+                fx_rate: Some(existing.fx_rate),
                 metadata: Some(patch),
             })
             .await
