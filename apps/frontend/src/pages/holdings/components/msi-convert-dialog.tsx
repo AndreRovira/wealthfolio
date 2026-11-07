@@ -1,6 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import {
@@ -67,39 +66,46 @@ export function MsiConvertDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const { t } = useTranslation();
-  const qc = useQueryClient();
-  const candidates = useQuery({
-    queryKey: ["msi", "candidates"],
-    queryFn: () => request<Candidate[]>("GET", "/candidates?days=120"),
-    enabled: open,
-  });
+  // Plain fetches: the holdings page tests mock react-query partially.
+  const [candidates, setCandidates] = useState<Candidate[] | null>(null);
   const [activityId, setActivityId] = useState("");
   const [months, setMonths] = useState("6");
   const [firstDue, setFirstDue] = useState("");
   const [name, setName] = useState("");
-  const chosen = candidates.data?.find((c) => c.activityId === activityId);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    setCandidates(null);
+    request<Candidate[]>("GET", "/candidates?days=120")
+      .then(setCandidates)
+      .catch((e: Error) => toast.error(e.message));
+  }, [open]);
+  const chosen = candidates?.find((c) => c.activityId === activityId);
 
-  const convert = useMutation({
-    mutationFn: () =>
-      request("POST", "/convert", {
+  const convert = async () => {
+    setBusy(true);
+    try {
+      await request("POST", "/convert", {
         activityId,
         months: Number(months),
         firstDue,
         name: name || null,
-      }),
-    onSuccess: () => {
+      });
       toast.success(t("holdings:msi.converted"));
-      void qc.invalidateQueries();
       setActivityId("");
       setName("");
       onOpenChange(false);
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
+      window.location.reload();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const pick = (id: string) => {
     setActivityId(id);
-    const c = candidates.data?.find((x) => x.activityId === id);
+    const c = candidates?.find((x) => x.activityId === id);
     if (c) {
       setFirstDue(nextMonthSameDay(c.date));
       setName(c.notes ?? "");
@@ -107,7 +113,7 @@ export function MsiConvertDialog({
   };
 
   const monthly = chosen ? chosen.amount / Math.max(1, Number(months) || 1) : 0;
-  const ready = !!chosen && Number(months) >= 1 && !!firstDue && !convert.isPending;
+  const ready = !!chosen && Number(months) >= 1 && !!firstDue && !busy;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -122,15 +128,13 @@ export function MsiConvertDialog({
             <ResponsiveSelect
               value={activityId}
               onValueChange={pick}
-              placeholder={
-                candidates.isLoading ? t("common:loading") : t("holdings:msi.pickCharge")
-              }
-              options={(candidates.data ?? []).map((c) => ({
+              placeholder={candidates === null ? t("common:loading") : t("holdings:msi.pickCharge")}
+              options={(candidates ?? []).map((c) => ({
                 value: c.activityId,
                 label: `${c.date} · ${c.accountName} · ${c.notes ?? ""} · ${c.amount.toFixed(2)} ${c.currency}`,
               }))}
             />
-            {candidates.data?.length === 0 && (
+            {candidates?.length === 0 && (
               <p className="text-muted-foreground text-xs">{t("holdings:msi.noCharges")}</p>
             )}
           </div>
@@ -165,7 +169,7 @@ export function MsiConvertDialog({
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             {t("common:cancel")}
           </Button>
-          <Button onClick={() => convert.mutate()} disabled={!ready}>
+          <Button onClick={() => void convert()} disabled={!ready}>
             {t("holdings:msi.convert")}
           </Button>
         </DialogFooter>

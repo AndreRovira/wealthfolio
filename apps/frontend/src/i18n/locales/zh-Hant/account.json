@@ -59,7 +59,8 @@
     "unavailable": "現金餘額暫時無法使用，請等待載入完成或重新整理頁面。",
     "invalid_amount": "請輸入大於或等於零的有效餘額。",
     "success": "餘額已更新",
-    "error": "更新餘額失敗，請重試。"
+    "error": "更新餘額失敗，請重試。",
+    "record_as": "記錄為"
   },
   "investments": "投資",
   "net_contribution": "淨投入",

@@ -1221,6 +1221,7 @@
     "active": "Activa",
     "cadenceSemimonthly": "Quincenal, 15 y fin de mes",
     "in": "entra",
-    "out": "sale"
+    "out": "sale",
+    "linkedCount_many": "{{count}} categorías ligadas"
   }
 }

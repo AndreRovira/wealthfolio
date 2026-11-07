@@ -254,5 +254,18 @@
     "status_update_balance": "更新餘額",
     "update_balance": "更新餘額",
     "schedule": "還款計畫"
+  },
+  "msi": {
+    "title": "信用卡消費轉分期",
+    "description": "將已入帳的信用卡消費轉為免息分期：零利率貸款加上等額信用卡退款。每期款項會在到期日自動記入信用卡。",
+    "charge": "信用卡消費",
+    "pickCharge": "選擇一筆消費",
+    "noCharges": "最近 120 天沒有未轉換的信用卡消費。",
+    "months": "期數",
+    "firstDue": "首期到期",
+    "name": "名稱",
+    "preview": "{{months}} 期，每期",
+    "convert": "轉換",
+    "converted": "已建立分期"
   }
 }
