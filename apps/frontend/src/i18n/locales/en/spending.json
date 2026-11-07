@@ -1160,6 +1160,8 @@
     "splitHintFixed": "Fixed amount per pot on every cycle.",
     "addSplit": "Add line",
     "active": "Active",
-    "cadenceSemimonthly": "15th and last day"
+    "cadenceSemimonthly": "15th and last day",
+    "in": "in",
+    "out": "out"
   }
 }

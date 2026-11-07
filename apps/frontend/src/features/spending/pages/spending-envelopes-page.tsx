@@ -272,9 +272,11 @@ function EnvelopeCard({
         <div className="min-w-0 flex-1">
           <div className="text-foreground truncate text-sm font-semibold">{row.envelope.name}</div>
           <div className="text-muted-foreground text-2xs truncate tabular-nums">
-            {t("spending:envelopes.thisMonth")}: +
-            <PrivacyAmount value={row.fundedThisMonth} currency={currency} /> / −
-            <PrivacyAmount value={row.spentThisMonth} currency={currency} />
+            {t("spending:envelopes.thisMonth")}:{" "}
+            <PrivacyAmount value={row.fundedThisMonth} currency={currency} />{" "}
+            {t("spending:envelopes.in")} ·{" "}
+            <PrivacyAmount value={row.spentThisMonth} currency={currency} />{" "}
+            {t("spending:envelopes.out")}
             {row.linkedCategoryIds.length > 0 && (
               <> · {t("spending:envelopes.linkedCount", { count: row.linkedCategoryIds.length })}</>
             )}

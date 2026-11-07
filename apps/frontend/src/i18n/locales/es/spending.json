@@ -1219,6 +1219,8 @@
     "splitHintFixed": "Monto fijo por apartado en cada ciclo.",
     "addSplit": "Agregar línea",
     "active": "Activa",
-    "cadenceSemimonthly": "Quincenal, 15 y fin de mes"
+    "cadenceSemimonthly": "Quincenal, 15 y fin de mes",
+    "in": "entra",
+    "out": "sale"
   }
 }
