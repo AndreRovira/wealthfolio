@@ -260,21 +260,22 @@ impl MsiService {
             .get_alternative_holdings()
             .map_err(|e| anyhow!(e.to_string()))?;
         for holding in holdings.iter().filter(|h| h.kind == AssetKind::Liability) {
-            let Some(card_id) = holding
-                .metadata
-                .as_ref()
-                .and_then(|m| m.get(MSI_KEY)?.get("cardAccountId")?.as_str())
-                .map(String::from)
-            else {
+            // Converted charges carry a nested `msi` object; loans opted in later
+            // through the metadata route (flat strings only) use `msi_*` keys.
+            let meta_str = |nested: &str, flat: &str| -> Option<String> {
+                let m = holding.metadata.as_ref()?;
+                m.get(MSI_KEY)
+                    .and_then(|v| v.get(nested)?.as_str())
+                    .or_else(|| m.get(flat)?.as_str())
+                    .map(String::from)
+            };
+            let Some(card_id) = meta_str("cardAccountId", "msi_card_account_id") else {
                 continue;
             };
             // Loans that existed before auto-posting carry `postFrom`: instalments
             // before that day were settled some other way and must not be posted.
-            let post_from = holding
-                .metadata
-                .as_ref()
-                .and_then(|m| m.get(MSI_KEY)?.get("postFrom")?.as_str())
-                .and_then(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok());
+            let post_from = meta_str("postFrom", "msi_post_from")
+                .and_then(|d| NaiveDate::parse_from_str(&d, "%Y-%m-%d").ok());
             let instalments = self
                 .alternative_assets
                 .get_loan_instalments(&holding.id, as_of)
@@ -283,6 +284,13 @@ impl MsiService {
                 .metadata
                 .as_ref()
                 .and_then(|m| m.get(MSI_KEY)?.get("months")?.as_u64())
+                .or_else(|| {
+                    holding
+                        .loan
+                        .as_ref()
+                        .and_then(|l| l.original_amount.zip(l.payment_amount))
+                        .map(|(o, p)| (o / p).round() as u64)
+                })
                 .unwrap_or(instalments.len() as u64) as usize;
             let paid: Vec<NaiveDate> = self
                 .alternative_assets
