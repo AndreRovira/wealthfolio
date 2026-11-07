@@ -268,6 +268,13 @@ impl MsiService {
             else {
                 continue;
             };
+            // Loans that existed before auto-posting carry `postFrom`: instalments
+            // before that day were settled some other way and must not be posted.
+            let post_from = holding
+                .metadata
+                .as_ref()
+                .and_then(|m| m.get(MSI_KEY)?.get("postFrom")?.as_str())
+                .and_then(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok());
             let instalments = self
                 .alternative_assets
                 .get_loan_instalments(&holding.id, as_of)
@@ -289,6 +296,7 @@ impl MsiService {
                 .collect();
             for (index, instalment) in instalments.iter().enumerate() {
                 if instalment.due_date > as_of
+                    || post_from.is_some_and(|from| instalment.due_date < from)
                     || instalment.status == InstalmentStatus::Paid
                     || paid.contains(&instalment.due_date)
                     || instalment.scheduled <= 0.0
