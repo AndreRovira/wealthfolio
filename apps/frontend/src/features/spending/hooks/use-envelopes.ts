@@ -14,10 +14,10 @@ import type {
 
 export const ENVELOPES_KEY = "spending_envelopes";
 
-export function useEnvelopeSnapshot() {
+export function useEnvelopeSnapshot(asOf?: string) {
   return useQuery({
-    queryKey: [ENVELOPES_KEY, "snapshot"],
-    queryFn: () => api.getEnvelopeSnapshot(),
+    queryKey: [ENVELOPES_KEY, "snapshot", asOf ?? null],
+    queryFn: () => api.getEnvelopeSnapshot(asOf),
   });
 }
 

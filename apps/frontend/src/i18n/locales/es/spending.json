@@ -1222,7 +1222,20 @@
     "cadenceSemimonthly": "Quincenal, 15 y fin de mes",
     "in": "entra",
     "out": "sale",
-    "linkedCount_many": "{{count}} categorías ligadas"
+    "linkedCount_many": "{{count}} categorías ligadas",
+    "ready": "listo",
+    "readyCount_one": "{{count}} pago listo",
+    "readyCount_other": "{{count}} pagos listos",
+    "readyCount_many": "{{count}} pagos listos",
+    "dueIn_one": "vence en {{count}} día",
+    "dueIn_other": "vence en {{count}} días",
+    "dueIn_many": "vence en {{count}} días",
+    "overdue": "vencido",
+    "dueSoon": "Pagos próximos",
+    "pendingIncomeCount_one": "{{count}} depósito por repartir",
+    "pendingIncomeCount_other": "{{count}} depósitos por repartir",
+    "pendingIncomeCount_many": "{{count}} depósitos por repartir",
+    "targetsEditor": "Metas de presupuesto"
   },
   "savingsPlan": {
     "title": "Plan de ahorro",

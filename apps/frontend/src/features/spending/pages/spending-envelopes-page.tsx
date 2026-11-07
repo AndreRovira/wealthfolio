@@ -37,6 +37,9 @@ import {
   SheetHeader,
   SheetTitle,
   Skeleton,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
 } from "@wealthfolio/ui";
 import { Switch } from "@wealthfolio/ui/components/ui/switch";
 
@@ -51,6 +54,7 @@ import {
   useEnvelopeMutations,
   useEnvelopeSnapshot,
 } from "../hooks/use-envelopes";
+import { billDueState } from "../lib/envelope-status";
 import { useSpendingSettings } from "../hooks/use-spending-settings";
 import { SPENDING_THEME, tint } from "../lib/theme";
 import type {
@@ -111,6 +115,11 @@ export default function SpendingEnvelopesPage() {
   const navigate = useNavigate();
   const { isEnabled, isLoading: settingsLoading } = useSpendingSettings();
   const snapshot = useEnvelopeSnapshot();
+  const taxonomy = useTaxonomy(SPENDING_TAXONOMY);
+  const categoryMeta = useMemo(
+    () => new Map((taxonomy.data?.categories ?? []).map((c) => [c.id, c])),
+    [taxonomy.data?.categories],
+  );
   const [envelopeDialog, setEnvelopeDialog] = useState<{ open: boolean; row?: EnvelopeBalance }>({
     open: false,
   });
@@ -133,6 +142,15 @@ export default function SpendingEnvelopesPage() {
         }}
         actions={
           <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate("/spending/budget/targets")}
+              className="text-muted-foreground"
+            >
+              <Icons.Settings className="me-1.5 h-3.5 w-3.5" />
+              {t("spending:envelopes.targetsEditor")}
+            </Button>
             <Button variant="ghost" size="sm" onClick={() => setRulesOpen(true)}>
               <Icons.Refresh className="me-1.5 h-3.5 w-3.5" />
               {t("spending:envelopes.rules")}
@@ -174,6 +192,7 @@ export default function SpendingEnvelopesPage() {
                   key={row.envelope.id}
                   row={row}
                   snapshot={data}
+                  categoryMeta={categoryMeta}
                   onEdit={() => setEnvelopeDialog({ open: true, row })}
                 />
               ))
@@ -228,10 +247,12 @@ function TotalsStrip({ snapshot }: { snapshot: EnvelopeSnapshot }) {
 function EnvelopeCard({
   row,
   snapshot,
+  categoryMeta,
   onEdit,
 }: {
   row: EnvelopeBalance;
   snapshot: EnvelopeSnapshot;
+  categoryMeta: Map<string, TaxonomyCategory>;
   onEdit: () => void;
 }) {
   const { t } = useTranslation();
@@ -250,6 +271,14 @@ function EnvelopeCard({
   const accent = row.envelope.color ?? SPENDING_THEME.deep;
   const currency = snapshot.currency;
   const negative = row.balance < 0;
+  const envelopeIcon =
+    row.linkedCategoryIds.map((id) => categoryMeta.get(id)?.icon).find(Boolean) ?? null;
+  const monthIn = row.fundedThisMonth;
+  const monthOut = row.spentThisMonth;
+  const monthPct = monthIn > 0 ? Math.min(1, monthOut / monthIn) : monthOut > 0 ? 1 : 0;
+  const readyCount = row.bills.filter(
+    (b) => billDueState(b.bill.dueDay, b.balance, b.bill.expectedAmount, snapshot.asOf).ready,
+  ).length;
 
   return (
     <section className={cn(CARD, "overflow-hidden")}>
@@ -269,11 +298,20 @@ function EnvelopeCard({
           className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md"
           style={{ backgroundColor: tint(accent, 0.12), color: accent }}
         >
-          <CategoryIcon icon={row.envelope.icon ?? null} className="h-3.5 w-3.5" />
+          <CategoryIcon icon={row.envelope.icon ?? envelopeIcon} className="h-3.5 w-3.5" />
         </span>
         <div className="min-w-0 flex-1">
           <div className="text-foreground truncate text-sm font-semibold">{row.envelope.name}</div>
-          <div className="text-muted-foreground text-2xs truncate tabular-nums">
+          <div className="text-muted-foreground text-2xs flex items-center gap-1.5 truncate tabular-nums">
+            <span className="bg-muted/40 hidden h-1 w-16 shrink-0 overflow-hidden rounded-full sm:block">
+              <span
+                className="block h-full rounded-full"
+                style={{
+                  width: `${monthPct * 100}%`,
+                  backgroundColor: monthOut > monthIn ? "var(--destructive)" : accent,
+                }}
+              />
+            </span>
             {t("spending:envelopes.thisMonth")}:{" "}
             <PrivacyAmount value={row.fundedThisMonth} currency={currency} />{" "}
             {t("spending:envelopes.in")} ·{" "}
@@ -281,6 +319,12 @@ function EnvelopeCard({
             {t("spending:envelopes.out")}
             {row.linkedCategoryIds.length > 0 && (
               <> · {t("spending:envelopes.linkedCount", { count: row.linkedCategoryIds.length })}</>
+            )}
+            {readyCount > 0 && (
+              <span className="text-success">
+                {" "}
+                · {t("spending:envelopes.readyCount", { count: readyCount })}
+              </span>
             )}
           </div>
         </div>
@@ -340,28 +384,93 @@ function EnvelopeCard({
 
       {open && row.bills.length > 0 && (
         <div className="border-border/60 divide-border/40 divide-y border-t">
-          {row.bills.map((b) => (
+          {row.bills.map((b) => {
+            const due = billDueState(
+              b.bill.dueDay,
+              b.balance,
+              b.bill.expectedAmount,
+              snapshot.asOf,
+            );
+            const pct =
+              b.bill.expectedAmount > 0
+                ? Math.max(0, Math.min(1, b.balance / b.bill.expectedAmount))
+                : 0;
+            const icon = b.linkedCategoryIds
+              .map((id) => categoryMeta.get(id))
+              .find((c) => c?.icon);
+            return (
             <div
               key={b.bill.id}
-              className="hover:bg-muted/15 flex items-center gap-2 px-3 py-1.5 text-xs sm:gap-3 sm:px-4"
+              className={cn(
+                "hover:bg-muted/15 flex items-center gap-2 px-3 py-1.5 text-xs sm:gap-3 sm:px-4",
+                due.ready && "bg-success/5",
+              )}
             >
-              <span className="w-5" />
+              <span
+                className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md"
+                style={{
+                  backgroundColor: tint(icon?.color ?? accent, 0.12),
+                  color: icon?.color ?? accent,
+                }}
+                aria-hidden
+              >
+                <CategoryIcon icon={icon?.icon ?? null} className="h-3 w-3" />
+              </span>
               <span className="text-foreground min-w-0 flex-1 truncate">
                 {b.bill.name}
-                {b.bill.dueDay != null && (
-                  <span className="text-muted-foreground">
-                    {" "}
-                    · {t("spending:envelopes.dueDay", { day: b.bill.dueDay })}
+                {due.daysLeft !== null && (
+                  <span
+                    className={cn(
+                      "ms-1.5 rounded px-1 py-px text-2xs",
+                      due.overdue
+                        ? "bg-destructive/15 text-destructive"
+                        : due.daysLeft <= 7
+                          ? "bg-warning-subtle text-warning-subtle-foreground"
+                          : "bg-muted text-muted-foreground",
+                    )}
+                  >
+                    {due.overdue
+                      ? t("spending:envelopes.overdue")
+                      : t("spending:envelopes.dueIn", { count: due.daysLeft })}
+                  </span>
+                )}
+                {due.ready && (
+                  <span className="bg-success/15 text-success ms-1.5 rounded px-1 py-px text-2xs">
+                    {t("spending:envelopes.ready")}
                   </span>
                 )}
               </span>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <div className="bg-muted/50 hidden h-1.5 w-20 shrink-0 overflow-hidden rounded-full sm:block" />
+                  }
+                >
+                  <div
+                    className="h-full rounded-full transition-all"
+                    style={{
+                      width: `${pct * 100}%`,
+                      backgroundColor: due.ready ? "var(--success)" : accent,
+                      boxShadow: due.ready ? "0 0 6px var(--success)" : undefined,
+                    }}
+                  />
+                </TooltipTrigger>
+                <TooltipContent side="top" sideOffset={4} className="text-xs">
+                  <PrivacyAmount value={b.balance} currency={currency} /> /{" "}
+                  <PrivacyAmount value={b.bill.expectedAmount} currency={currency} />
+                </TooltipContent>
+              </Tooltip>
               <span className="text-muted-foreground hidden w-24 shrink-0 text-end tabular-nums sm:inline">
                 <PrivacyAmount value={b.bill.expectedAmount} currency={currency} />
               </span>
               <span
                 className={cn(
                   "w-24 shrink-0 text-end font-medium tabular-nums",
-                  b.balance < 0 ? "text-destructive" : "text-foreground",
+                  b.balance < 0
+                    ? "text-destructive"
+                    : due.ready
+                      ? "text-success"
+                      : "text-foreground",
                 )}
               >
                 <PrivacyAmount value={b.balance} currency={currency} />
@@ -404,7 +513,8 @@ function EnvelopeCard({
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

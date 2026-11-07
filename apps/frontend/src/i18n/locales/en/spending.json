@@ -1162,7 +1162,17 @@
     "active": "Active",
     "cadenceSemimonthly": "15th and last day",
     "in": "in",
-    "out": "out"
+    "out": "out",
+    "ready": "ready",
+    "readyCount_one": "{{count}} bill ready",
+    "readyCount_other": "{{count}} bills ready",
+    "dueIn_one": "due in {{count}} day",
+    "dueIn_other": "due in {{count}} days",
+    "overdue": "overdue",
+    "dueSoon": "Bills due soon",
+    "pendingIncomeCount_one": "{{count}} deposit to split",
+    "pendingIncomeCount_other": "{{count}} deposits to split",
+    "targetsEditor": "Budget targets"
   },
   "savingsPlan": {
     "title": "Savings plan",

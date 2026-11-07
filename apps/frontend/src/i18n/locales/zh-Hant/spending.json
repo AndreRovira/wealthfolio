@@ -1162,7 +1162,17 @@
     "addSplit": "新增一列",
     "active": "啟用",
     "in": "入",
-    "out": "出"
+    "out": "出",
+    "ready": "就緒",
+    "readyCount_one": "{{count}} 筆帳單就緒",
+    "readyCount_other": "{{count}} 筆帳單就緒",
+    "dueIn_one": "{{count}} 天後到期",
+    "dueIn_other": "{{count}} 天後到期",
+    "overdue": "逾期",
+    "dueSoon": "即將到期的帳單",
+    "pendingIncomeCount_one": "{{count}} 筆存款待分配",
+    "pendingIncomeCount_other": "{{count}} 筆存款待分配",
+    "targetsEditor": "預算目標"
   },
   "savingsPlan": {
     "title": "儲蓄計畫",

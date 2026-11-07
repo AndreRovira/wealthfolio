@@ -82,9 +82,8 @@ import {
   getZonedDateParts,
   localDateBoundaryToISOString,
   localDateParts,
-  zonedCalendarDateBoundaryToDate,
 } from "../lib/timezone";
-import { BudgetLineChartCard } from "./budget-line-chart-card";
+import { EnvelopesDashboardCard } from "./envelopes-dashboard-card";
 import { CashFlowStrip } from "./cash-flow-strip";
 import { EventsCard } from "./events-card";
 import { RecentActivityCard } from "./recent-activity-card";
@@ -481,7 +480,6 @@ export default function SpendingTabContent() {
       return monthKey > currentBudgetMonthKey ? currentBudgetMonthKey : monthKey;
     });
   }, [budgetMonthTouched, currentBudgetMonthKey]);
-  const { data: budgetCardBudget, isError: budgetCardBudgetErrored } = useBudget(budgetMonthKey);
   const { accounts = [] } = useAccounts({ filterActive: false });
   const { data: categorizationRules = [], isLoading: categorizationRulesLoading } =
     useCategorizationRules();
@@ -493,65 +491,8 @@ export default function SpendingTabContent() {
   // failures degrade more silently than report (their absence shows up as
   // a flat treemap or hidden chips), but the user deserves a signal.
   const dataErrored =
-    reportErrored || activitiesErrored || budgetErrored || budgetCardBudgetErrored;
+    reportErrored || activitiesErrored || budgetErrored;
   const hasNoIncludedAccounts = !spendingSettingsLoading && spendingAccountIds.length === 0;
-
-  const budgetMonthRange = useMemo(() => {
-    const month = parseMonthKey(budgetMonthKey) ?? todayParts;
-    const start = { year: month.year, month: month.month, day: 1 };
-    const end =
-      budgetMonthKey === currentBudgetMonthKey
-        ? todayParts
-        : { ...month, day: daysInCalendarMonth(month.year, month.month) };
-    return { from: localDateFromParts(start), to: localDateFromParts(end) };
-  }, [budgetMonthKey, currentBudgetMonthKey, todayParts]);
-  const monthReportReq = useMemo(
-    () => rangeToReportRequest(budgetMonthRange, appTimezone),
-    [budgetMonthRange, appTimezone],
-  );
-  const { data: monthReport } = useSpendingReport(monthReportReq);
-  const budgetMonthActivityRange = useMemo(
-    () => ({
-      from: formatDateISO(budgetMonthRange.from),
-      to: formatDateISO(budgetMonthRange.to),
-    }),
-    [budgetMonthRange],
-  );
-  const shiftBudgetMonth = (months: number) => {
-    setBudgetMonthTouched(true);
-    setBudgetMonthKey((monthKey) => {
-      const next = addMonthsToMonthKey(monthKey, months);
-      return next > currentBudgetMonthKey ? currentBudgetMonthKey : next;
-    });
-  };
-
-  const historyReportReq = useMemo(() => {
-    const month = parseMonthKey(budgetMonthKey) ?? todayParts;
-    const monthStart = { year: month.year, month: month.month, day: 1 };
-    const historyStart = addCalendarMonths(monthStart, -3);
-    const historyEndMonth = addCalendarMonths(monthStart, -1);
-    const historyEnd = {
-      ...historyEndMonth,
-      day: daysInCalendarMonth(historyEndMonth.year, historyEndMonth.month),
-    };
-    return {
-      startDate: zonedCalendarDateBoundaryToDate(historyStart, "start", appTimezone).toISOString(),
-      endDate: zonedCalendarDateBoundaryToDate(historyEnd, "end", appTimezone).toISOString(),
-    };
-  }, [budgetMonthKey, appTimezone, todayParts]);
-  const { data: historyReport } = useSpendingReport(historyReportReq);
-
-  const historicalDailyAvg = useMemo(() => {
-    const total = historyReport?.current.outflow ?? 0;
-    if (total <= 0) return 0;
-    const month = parseMonthKey(budgetMonthKey) ?? todayParts;
-    const monthStart = { year: month.year, month: month.month, day: 1 };
-    const start = addCalendarMonths(monthStart, -3);
-    const endMonth = addCalendarMonths(monthStart, -1);
-    const end = { ...endMonth, day: daysInCalendarMonth(endMonth.year, endMonth.month) };
-    const days = Math.max(1, calendarDaysBetweenInclusive(start, end));
-    return total / days;
-  }, [historyReport, budgetMonthKey, todayParts]);
 
   // Always render in the user's base currency. The backend FX-converts every
   // activity in `report` to base at period end, so labeling by the first
@@ -1205,25 +1146,9 @@ export default function SpendingTabContent() {
 
             <div className="contents @min-[53rem]:block @min-[53rem]:space-y-6">
               <div className="order-2 @min-[53rem]:order-none">
-                <BudgetLineChartCard
+                <EnvelopesDashboardCard
                   monthKey={budgetMonthKey}
-                  today={todayParts}
                   isCurrentMonth={budgetMonthKey === currentBudgetMonthKey}
-                  onPreviousMonth={() => shiftBudgetMonth(-1)}
-                  onNextMonth={() => shiftBudgetMonth(1)}
-                  canGoNextMonth={budgetMonthKey < currentBudgetMonthKey}
-                  activityRange={budgetMonthActivityRange}
-                  target={budgetCardBudget?.computed.totals.spendingPlanned ?? 0}
-                  spent={monthReport?.current.outflow ?? 0}
-                  currency={budgetCardBudget?.computed.currency ?? currency}
-                  historicalDailyAvg={historicalDailyAvg}
-                  allocations={
-                    budgetCardBudget?.computed.groupRows.flatMap((row) => row.categories) ?? []
-                  }
-                  spendingBreakdown={monthReport?.spendingBreakdown ?? []}
-                  categoriesMeta={categoriesMeta}
-                  monthByDay={monthReport?.byDay ?? []}
-                  historicalByDay={historyReport?.byDay ?? []}
                 />
               </div>
 

@@ -240,7 +240,7 @@ const PaceCard: FC<PaceCardProps> = ({
           {t("spending:whereIAm.noBudgetBody")}
         </p>
         <Link
-          to="/spending/budget"
+          to="/spending/budget/targets"
           className="text-foreground mt-6 inline-flex items-center gap-1 text-xs font-medium underline-offset-4 hover:underline"
         >
           {t("spending:whereIAm.createBudget")}

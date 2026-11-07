@@ -1,0 +1,142 @@
+import { useTranslation } from "react-i18next";
+import { Link } from "react-router-dom";
+
+import { Icons, PrivacyAmount, Skeleton } from "@wealthfolio/ui";
+
+import { DashboardCard } from "@/components/dashboard-card";
+import { cn } from "@/lib/utils";
+
+import { useEnvelopeSnapshot } from "../hooks/use-envelopes";
+import { SPENDING_THEME, tint } from "../lib/theme";
+import { billDueState, type BillDue } from "../lib/envelope-status";
+
+/** Last calendar day of a YYYY-MM key, as YYYY-MM-DD. */
+function monthEnd(monthKey: string) {
+  const [y, m] = monthKey.split("-").map(Number);
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return `${monthKey}-${String(last).padStart(2, "0")}`;
+}
+
+/** Envelope balances and the bills coming due, in place of the monthly budget. */
+export function EnvelopesDashboardCard({
+  monthKey,
+  isCurrentMonth,
+}: {
+  monthKey: string;
+  isCurrentMonth: boolean;
+}) {
+  const { t } = useTranslation();
+  // A past month shows balances as they stood at its end.
+  const snapshot = useEnvelopeSnapshot(isCurrentMonth ? undefined : monthEnd(monthKey));
+  const data = snapshot.data;
+  const manage = (
+    <Link
+      to="/spending/envelopes"
+      className="text-muted-foreground hover:text-foreground text-xs underline-offset-4 hover:underline"
+    >
+      {t("spending:budgetChart.manage")}
+    </Link>
+  );
+
+  if (!data) {
+    return (
+      <DashboardCard title={t("spending:envelopes.heading")} action={manage}>
+        <Skeleton className="h-24 w-full" />
+      </DashboardCard>
+    );
+  }
+
+  const currency = data.currency;
+  const maxAbs = Math.max(1, ...data.envelopes.map((e) => Math.abs(e.balance)));
+  const dueSoon: (BillDue & { envelopeName: string; name: string; balance: number; cost: number })[] =
+    data.envelopes
+      .flatMap((e) =>
+        e.bills.map((b) => ({
+          ...billDueState(b.bill.dueDay, b.balance, b.bill.expectedAmount, data.asOf),
+          envelopeName: e.envelope.name,
+          name: b.bill.name,
+          balance: b.balance,
+          cost: b.bill.expectedAmount,
+        })),
+      )
+      .filter((b) => b.daysLeft !== null && b.daysLeft <= 14)
+      .sort((a, b) => (a.daysLeft ?? 0) - (b.daysLeft ?? 0));
+
+  return (
+    <DashboardCard title={t("spending:envelopes.heading")} action={manage} padded={false}>
+      <div className="divide-border/40 divide-y">
+        {data.pendingIncome.length > 0 && (
+          <Link
+            to="/spending/envelopes"
+            className="bg-warning-subtle/40 hover:bg-warning-subtle/60 flex items-center gap-2 px-4 py-2 text-xs"
+          >
+            <Icons.Sparkles className="text-warning h-3.5 w-3.5" />
+            {t("spending:envelopes.pendingIncomeCount", { count: data.pendingIncome.length })}
+          </Link>
+        )}
+        <div className="space-y-2 px-4 py-3">
+          {data.envelopes.map((e) => {
+            const accent = e.envelope.color ?? SPENDING_THEME.deep;
+            const negative = e.balance < 0;
+            const width = `${Math.min(100, (Math.abs(e.balance) / maxAbs) * 100)}%`;
+            return (
+              <div key={e.envelope.id} className="text-xs">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-foreground truncate">{e.envelope.name}</span>
+                  <span className={cn("shrink-0 tabular-nums", negative ? "text-destructive" : "text-foreground")}>
+                    <PrivacyAmount value={e.balance} currency={currency} />
+                  </span>
+                </div>
+                <div className="bg-muted/40 mt-1 h-1.5 overflow-hidden rounded-full">
+                  <div
+                    className="h-full rounded-full"
+                    style={{
+                      width,
+                      backgroundColor: negative ? "var(--destructive)" : accent,
+                      opacity: negative ? 0.7 : 1,
+                    }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+          <div className="text-muted-foreground flex items-center justify-between pt-1 text-2xs uppercase tracking-wide">
+            <span>{t("spending:envelopes.totalBalance")}</span>
+            <span className="text-foreground tabular-nums normal-case">
+              <PrivacyAmount value={data.totalBalance} currency={currency} />
+            </span>
+          </div>
+        </div>
+        {dueSoon.length > 0 && (
+          <div className="px-4 py-3">
+            <div className="text-muted-foreground mb-1.5 text-2xs uppercase tracking-wide">
+              {t("spending:envelopes.dueSoon")}
+            </div>
+            <div className="space-y-1">
+              {dueSoon.slice(0, 6).map((b) => (
+                <div key={`${b.envelopeName}:${b.name}`} className="flex items-center gap-2 text-xs">
+                  <span
+                    className="h-1.5 w-1.5 shrink-0 rounded-full"
+                    style={{
+                      backgroundColor: b.ready ? "var(--success)" : b.overdue ? "var(--destructive)" : "var(--warning)",
+                      boxShadow: b.ready ? `0 0 6px ${tint("var(--success)", 0.8)}` : undefined,
+                    }}
+                  />
+                  <span className="text-foreground min-w-0 flex-1 truncate">{b.name}</span>
+                  <span className="text-muted-foreground shrink-0">
+                    {b.overdue
+                      ? t("spending:envelopes.overdue")
+                      : t("spending:envelopes.dueIn", { count: b.daysLeft ?? 0 })}
+                  </span>
+                  <span className={cn("w-20 shrink-0 text-end tabular-nums", b.ready ? "text-success" : "text-foreground")}>
+                    <PrivacyAmount value={b.balance} currency={currency} />
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </DashboardCard>
+  );
+}

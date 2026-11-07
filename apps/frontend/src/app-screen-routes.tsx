@@ -107,7 +107,9 @@ export const AppScreenRoutes = memo(function AppScreenRoutes({ location }: AppSc
       <Route path="goals/:goalId/guide" element={<GoalRetirementGuidePage />} />
       <Route path="goals/:goalId" element={<GoalDetailPage />} />
       <Route path="spending/insights" element={<SpendingInsightsRedirect />} />
-      <Route path="spending/budget" element={<SpendingBudgetPage />} />
+      {/* Fork: envelopes are the budget; the upstream editor keeps its targets page. */}
+      <Route path="spending/budget" element={<SpendingEnvelopesPage />} />
+      <Route path="spending/budget/targets" element={<SpendingBudgetPage />} />
       <Route path="spending/envelopes" element={<SpendingEnvelopesPage />} />
       {/* Dynamic addon routes */}
       {dynamicRoutes.map(({ path, addonId, routeId }) => (

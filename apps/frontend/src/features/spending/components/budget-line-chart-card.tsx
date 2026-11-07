@@ -245,7 +245,7 @@ export function BudgetLineChartCard({
       >
         <p className="text-muted-foreground text-sm">{t("spending:budgetChart.noTarget")}</p>
         <Link
-          to={`/spending/budget?month=${monthKey}`}
+          to={`/spending/budget/targets?month=${monthKey}`}
           className="text-foreground mt-2 inline-flex text-xs underline-offset-4 hover:underline"
         >
           {t("spending:budgetChart.setBudget")}
@@ -692,7 +692,7 @@ const BudgetManageLink = ({ monthKey }: { monthKey: string }) => {
         {t("spending:envelopes.heading")}
       </Link>
       <Link
-        to={`/spending/budget?month=${monthKey}`}
+        to={`/spending/budget/targets?month=${monthKey}`}
         className="text-muted-foreground hover:text-foreground text-xs underline-offset-4 hover:underline"
       >
         {t("spending:budgetChart.manage")}
