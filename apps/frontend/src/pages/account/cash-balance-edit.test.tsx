@@ -89,7 +89,7 @@ describe("cash balance editing", () => {
     expect(mocks.createActivity).toHaveBeenCalledWith(
       expect.objectContaining({
         accountId: "account-1",
-        activityType: "DEPOSIT",
+        activityType: "INTEREST",
         currency: "USD",
         amount: 10,
       }),
@@ -159,7 +159,7 @@ describe("cash balance editing", () => {
 
     await waitFor(() =>
       expect(mocks.createActivity).toHaveBeenCalledWith(
-        expect.objectContaining({ currency: "HKD", activityType: "DEPOSIT", amount: 50 }),
+        expect.objectContaining({ currency: "HKD", activityType: "INTEREST", amount: 50 }),
       ),
     );
   });
@@ -221,7 +221,7 @@ describe("cash balance editing", () => {
 
     await waitFor(() =>
       expect(mocks.createActivity).toHaveBeenCalledWith(
-        expect.objectContaining({ currency: "USD", activityType: "DEPOSIT", amount: 5 }),
+        expect.objectContaining({ currency: "USD", activityType: "INTEREST", amount: 5 }),
       ),
     );
   });
@@ -259,12 +259,12 @@ describe("cash balance editing", () => {
     await user.type(input, "110");
     rerenderMetrics({ cashCurrencySplit: [{ ...cashCurrencySplit[1], valueLocal: 105 }] });
     expect(input).toHaveValue("110");
-    expect(screen.getByText("Deposit: 5 USD")).toBeInTheDocument();
+    expect(screen.getByText("Interest: 5 USD")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() =>
       expect(mocks.createActivity).toHaveBeenCalledWith(
-        expect.objectContaining({ currency: "USD", activityType: "DEPOSIT", amount: 5 }),
+        expect.objectContaining({ currency: "USD", activityType: "INTEREST", amount: 5 }),
       ),
     );
   });

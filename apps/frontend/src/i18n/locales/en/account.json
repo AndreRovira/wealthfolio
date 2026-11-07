@@ -52,14 +52,15 @@
   "holdings": "Holdings",
   "balance_edit": {
     "title": "Adjust cash balance",
-    "description": "Adjust one currency at a time. The difference is recorded as a deposit or withdrawal in that currency.",
+    "description": "Adjust one currency at a time. The difference is recorded as interest, deposit, withdrawal or fee in that currency.",
     "current_balance": "Current balance",
     "new_balance": "New balance",
     "no_change": "No balance change",
     "unavailable": "Cash balances are unavailable. Wait for them to load or refresh the page.",
     "invalid_amount": "Enter a valid balance of zero or more.",
     "success": "Balance updated",
-    "error": "Error updating balance. Please try again."
+    "error": "Error updating balance. Please try again.",
+    "record_as": "Record as"
   },
   "investments": "Investments",
   "net_contribution": "Net Contribution",

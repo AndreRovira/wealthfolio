@@ -5,16 +5,25 @@ import { ActivityCreate } from "@/lib/types";
 import { toast } from "@wealthfolio/ui/components/ui/use-toast";
 import { useTranslation } from "react-i18next";
 
+export type BalanceUpdateKind = "DEPOSIT" | "WITHDRAWAL" | "INTEREST" | "FEE";
+
 export interface BalanceUpdateInput {
   currency: string;
   currentBalance: number;
   targetBalance: number;
+  /** How to book the difference; defaults to a deposit or withdrawal. */
+  activityType?: BalanceUpdateKind;
 }
 
 export const useBalanceUpdate = (accountId: string) => {
   const { t } = useTranslation();
   const mutation = useMutation({
-    mutationFn: async ({ currency, currentBalance, targetBalance }: BalanceUpdateInput) => {
+    mutationFn: async ({
+      currency,
+      currentBalance,
+      targetBalance,
+      activityType,
+    }: BalanceUpdateInput) => {
       const difference = targetBalance - currentBalance;
       if (
         !accountId.trim() ||
@@ -33,7 +42,7 @@ export const useBalanceUpdate = (accountId: string) => {
       // Don't set assetId - backend generates CASH:{currency} for cash activities.
       const newActivity: ActivityCreate = {
         accountId,
-        activityType: difference > 0 ? "DEPOSIT" : "WITHDRAWAL",
+        activityType: activityType ?? (difference > 0 ? "DEPOSIT" : "WITHDRAWAL"),
         activityDate: new Date().toISOString(),
         currency,
         amount,

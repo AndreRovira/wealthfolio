@@ -52,14 +52,15 @@
   "holdings": "Posiciones",
   "balance_edit": {
     "title": "Ajustar saldo en efectivo",
-    "description": "Ajusta una moneda a la vez. La diferencia se registra como un depósito o retiro en esa moneda.",
+    "description": "Ajusta una moneda a la vez. La diferencia se registra como interés, depósito, retiro o comisión en esa moneda.",
     "current_balance": "Saldo actual",
     "new_balance": "Nuevo saldo",
     "no_change": "Sin cambios en el saldo",
     "unavailable": "Los saldos en efectivo no están disponibles. Espera a que se carguen o actualiza la página.",
     "invalid_amount": "Introduce un saldo válido igual o mayor que cero.",
     "success": "Saldo actualizado",
-    "error": "Error al actualizar el saldo. Inténtalo de nuevo."
+    "error": "Error al actualizar el saldo. Inténtalo de nuevo.",
+    "record_as": "Registrar como"
   },
   "investments": "Inversiones",
   "net_contribution": "Aportación neta",

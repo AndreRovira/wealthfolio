@@ -30,10 +30,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@wealthfolio/ui/components/ui/select";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { z } from "zod";
-import { useBalanceUpdate } from "./use-balance-update";
+import { useBalanceUpdate, type BalanceUpdateKind } from "./use-balance-update";
 
 interface CashBalance {
   currency: string;
@@ -91,6 +92,21 @@ export function CashBalanceDialog({
   const currentBalance = balances.find((balance) => balance.currency === currency)?.balance;
   const difference = (targetBalance ?? NaN) - (currentBalance ?? NaN);
   const amount = parseFloat(Math.abs(difference).toFixed(DECIMAL_PRECISION));
+  // Interest-bearing accounts are the usual reason to set a balance by hand:
+  // a positive difference books as interest unless told otherwise.
+  const [positiveKind, setPositiveKind] = useState<BalanceUpdateKind>("INTEREST");
+  const [negativeKind, setNegativeKind] = useState<BalanceUpdateKind>("WITHDRAWAL");
+  const activityType = difference > 0 ? positiveKind : negativeKind;
+  const kindOptions: { value: BalanceUpdateKind; label: string }[] =
+    difference > 0
+      ? [
+          { value: "INTEREST", label: t("activity:type_interest") },
+          { value: "DEPOSIT", label: t("activity:type_deposit") },
+        ]
+      : [
+          { value: "WITHDRAWAL", label: t("activity:type_withdrawal") },
+          { value: "FEE", label: t("activity:type_fee") },
+        ];
   const busy = isPending || form.formState.isSubmitting;
   const unavailable = disabled || currentBalance == null;
   const formatBalance = (value: number) =>
@@ -101,7 +117,7 @@ export function CashBalanceDialog({
   const handleSubmit = form.handleSubmit(async (values) => {
     if (isPending || unavailable || currentBalance == null) return;
     try {
-      await updateBalance({ ...values, currentBalance });
+      await updateBalance({ ...values, currentBalance, activityType });
       onClose();
     } catch {
       form.setError("root", { message: t("account:balance_edit.error") });
@@ -183,13 +199,39 @@ export function CashBalanceDialog({
                 </FormItem>
               )}
             />
+            {Number.isFinite(amount) && amount > 0 && !unavailable && (
+              <FormItem>
+                <FormLabel>{t("account:balance_edit.record_as")}</FormLabel>
+                <Select
+                  items={kindOptions}
+                  value={activityType}
+                  disabled={busy}
+                  onValueChange={(value) => {
+                    if (!value) return;
+                    if (difference > 0) setPositiveKind(value as BalanceUpdateKind);
+                    else setNegativeKind(value as BalanceUpdateKind);
+                  }}
+                >
+                  <SelectTrigger aria-label={t("account:balance_edit.record_as")}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {kindOptions.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FormItem>
+            )}
             <p className="text-muted-foreground text-sm" aria-live="polite">
               {unavailable
                 ? t("account:balance_edit.unavailable")
                 : Number.isFinite(amount) && targetBalance != null && targetBalance >= 0
                   ? amount === 0
                     ? t("account:balance_edit.no_change")
-                    : `${t(difference > 0 ? "activity:type_deposit" : "activity:type_withdrawal")}: ${formatBalance(amount)} ${currency}`
+                    : `${kindOptions.find((o) => o.value === activityType)?.label}: ${formatBalance(amount)} ${currency}`
                   : null}
             </p>
             {form.formState.errors.root && (
