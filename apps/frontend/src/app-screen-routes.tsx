@@ -36,6 +36,7 @@ import MarketDataSettingsPage from "./pages/settings/market-data/market-data-set
 import TaxonomiesPage from "./pages/settings/taxonomies/taxonomies-page";
 import ConnectSettingsPage from "./pages/settings/wealthfolio-connect/connect-settings-page";
 import SpendingBudgetPage from "./features/spending/pages/spending-budget-page";
+import SpendingEnvelopesPage from "./features/spending/pages/spending-envelopes-page";
 import SpendingSettingsPage from "./pages/settings/spending/spending-settings-page";
 import SpendingSettingsCategoriesPage from "./pages/settings/spending/categories/spending-categories-page";
 import SpendingSettingsEventsPage from "./pages/settings/spending/events/spending-events-page";
@@ -107,6 +108,7 @@ export const AppScreenRoutes = memo(function AppScreenRoutes({ location }: AppSc
       <Route path="goals/:goalId" element={<GoalDetailPage />} />
       <Route path="spending/insights" element={<SpendingInsightsRedirect />} />
       <Route path="spending/budget" element={<SpendingBudgetPage />} />
+      <Route path="spending/envelopes" element={<SpendingEnvelopesPage />} />
       {/* Dynamic addon routes */}
       {dynamicRoutes.map(({ path, addonId, routeId }) => (
         <Route

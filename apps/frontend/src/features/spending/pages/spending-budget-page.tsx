@@ -52,6 +52,13 @@ export default function SpendingBudgetPage() {
     <div className="flex flex-wrap items-center gap-2">
       <MonthSwitcher monthKey={monthKey} onChange={setMonthKey} />
       <Link
+        to="/spending/envelopes"
+        className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "text-muted-foreground")}
+      >
+        <Icons.Wallet className="me-1.5 h-3.5 w-3.5" />
+        {t("spending:envelopes.heading")}
+      </Link>
+      <Link
         to="/settings/spending/setup"
         className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "text-muted-foreground")}
       >
