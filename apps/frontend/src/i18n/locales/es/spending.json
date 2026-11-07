@@ -1235,7 +1235,8 @@
     "pendingIncomeCount_one": "{{count}} depósito por repartir",
     "pendingIncomeCount_other": "{{count}} depósitos por repartir",
     "pendingIncomeCount_many": "{{count}} depósitos por repartir",
-    "targetsEditor": "Metas de presupuesto"
+    "targetsEditor": "Metas de presupuesto",
+    "dueToday": "vence hoy"
   },
   "savingsPlan": {
     "title": "Plan de ahorro",

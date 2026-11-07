@@ -431,7 +431,9 @@ function EnvelopeCard({
                   >
                     {due.overdue
                       ? t("spending:envelopes.overdue")
-                      : t("spending:envelopes.dueIn", { count: due.daysLeft })}
+                      : (due.daysLeft) === 0
+                        ? t("spending:envelopes.dueToday")
+                        : t("spending:envelopes.dueIn", { count: due.daysLeft })}
                   </span>
                 )}
                 {due.ready && (

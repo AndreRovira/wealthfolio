@@ -126,7 +126,9 @@ export function EnvelopesDashboardCard({
                   <span className="text-muted-foreground shrink-0">
                     {b.overdue
                       ? t("spending:envelopes.overdue")
-                      : t("spending:envelopes.dueIn", { count: b.daysLeft ?? 0 })}
+                      : (b.daysLeft ?? 0) === 0
+                        ? t("spending:envelopes.dueToday")
+                        : t("spending:envelopes.dueIn", { count: b.daysLeft ?? 0 })}
                   </span>
                   <span className={cn("w-20 shrink-0 text-end tabular-nums", b.ready ? "text-success" : "text-foreground")}>
                     <PrivacyAmount value={b.balance} currency={currency} />
