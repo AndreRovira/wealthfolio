@@ -45,6 +45,7 @@ import type { TaxonomyCategory } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 import { CategoryIcon } from "../components/category-chips";
+import { SavingsPlanCard } from "../components/savings-plan-card";
 import {
   useEnvelopeEntries,
   useEnvelopeMutations,
@@ -177,6 +178,7 @@ export default function SpendingEnvelopesPage() {
                 />
               ))
             )}
+            <SavingsPlanCard />
           </>
         )}
       </PageContent>

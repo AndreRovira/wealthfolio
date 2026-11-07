@@ -1223,5 +1223,16 @@
     "in": "entra",
     "out": "sale",
     "linkedCount_many": "{{count}} categorías ligadas"
+  },
+  "savingsPlan": {
+    "title": "Plan de ahorro",
+    "planned": "Plan / mes",
+    "month": "Este mes",
+    "ytd": "Año a la fecha",
+    "rateMonth": "Tasa este mes",
+    "rateYtd": "año a la fecha",
+    "showOthers": "Mostrar otras cuentas para fijar un plan",
+    "hideOthers": "Ocultar otras cuentas",
+    "saveFailed": "No se pudo guardar el plan."
   }
 }

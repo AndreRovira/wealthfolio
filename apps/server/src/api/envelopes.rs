@@ -170,8 +170,29 @@ async fn apply_income(
     Ok(Json(state.envelope_service.apply_income(input).await?))
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SavingsQuery {
+    period_key: Option<String>,
+}
+
+async fn savings(
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
+    Query(q): Query<SavingsQuery>,
+) -> ApiResult<Json<wealthfolio_spending::savings::SavingsSnapshot>> {
+    let base = state.base_currency()?;
+    let timezone = state.timezone()?;
+    Ok(Json(
+        state
+            .savings_service
+            .snapshot(q.period_key, &base, &timezone)
+            .await?,
+    ))
+}
+
 pub fn router<S: Clone + Send + Sync + 'static>() -> Router<S> {
     Router::new()
+        .route("/spending/savings", get(savings))
         .route("/spending/envelopes/snapshot", get(snapshot))
         .route(
             "/spending/envelopes",

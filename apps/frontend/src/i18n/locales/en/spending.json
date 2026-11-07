@@ -1163,5 +1163,16 @@
     "cadenceSemimonthly": "15th and last day",
     "in": "in",
     "out": "out"
+  },
+  "savingsPlan": {
+    "title": "Savings plan",
+    "planned": "Plan / month",
+    "month": "This month",
+    "ytd": "Year to date",
+    "rateMonth": "Rate this month",
+    "rateYtd": "year to date",
+    "showOthers": "Show other accounts to set a plan",
+    "hideOthers": "Hide other accounts",
+    "saveFailed": "Failed to save the plan."
   }
 }

@@ -149,6 +149,7 @@ pub struct AppState {
     pub budget_service: Arc<wealthfolio_spending::budget::BudgetService>,
     pub envelope_service: Arc<wealthfolio_spending::envelopes::EnvelopeService>,
     pub msi_service: Arc<wealthfolio_spending::msi::MsiService>,
+    pub savings_service: Arc<wealthfolio_spending::savings::SavingsService>,
     pub spending_analytics_service: Arc<wealthfolio_spending::analytics::AnalyticsService>,
     pub spending_insight_service: Arc<wealthfolio_spending::insight::InsightService>,
     pub allocation_target_service: Arc<
@@ -982,6 +983,14 @@ async fn initialize_profile_state(
         .with_event_sink(domain_event_sink.clone()),
     );
 
+    // Spending: savings plan vs actual (fork feature)
+    let savings_service = Arc::new(wealthfolio_spending::savings::SavingsService::new(
+        activity_repository.clone(),
+        account_repo.clone(),
+        spending_settings_service.clone(),
+        fx_service.clone(),
+    ));
+
     // Spending: MSI instalment plans on credit cards (fork feature)
     let msi_service = Arc::new(wealthfolio_spending::msi::MsiService::new(
         activity_service.clone(),
@@ -1222,6 +1231,7 @@ async fn initialize_profile_state(
         budget_service,
         envelope_service,
         msi_service,
+        savings_service,
         spending_analytics_service,
         spending_insight_service,
         allocation_target_service,

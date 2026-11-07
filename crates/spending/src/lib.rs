@@ -41,6 +41,7 @@ pub mod events;
 mod fx;
 pub mod insight;
 pub mod msi;
+pub mod savings;
 pub mod settings;
 
 pub use error::SpendingError;

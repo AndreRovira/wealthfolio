@@ -1163,5 +1163,16 @@
     "active": "啟用",
     "in": "入",
     "out": "出"
+  },
+  "savingsPlan": {
+    "title": "儲蓄計畫",
+    "planned": "每月計畫",
+    "month": "本月",
+    "ytd": "年初至今",
+    "rateMonth": "本月儲蓄率",
+    "rateYtd": "年初至今",
+    "showOthers": "顯示其他帳戶以設定計畫",
+    "hideOthers": "隱藏其他帳戶",
+    "saveFailed": "無法儲存計畫。"
   }
 }
