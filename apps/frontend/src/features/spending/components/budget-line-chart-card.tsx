@@ -684,12 +684,20 @@ function BudgetCardHeaderActions({
 const BudgetManageLink = ({ monthKey }: { monthKey: string }) => {
   const { t } = useTranslation();
   return (
-    <Link
-      to={`/spending/budget?month=${monthKey}`}
-      className="text-muted-foreground hover:text-foreground text-xs underline-offset-4 hover:underline"
-    >
-      {t("spending:budgetChart.manage")}
-    </Link>
+    <span className="flex items-center gap-3">
+      <Link
+        to="/spending/envelopes"
+        className="text-muted-foreground hover:text-foreground text-xs underline-offset-4 hover:underline"
+      >
+        {t("spending:envelopes.heading")}
+      </Link>
+      <Link
+        to={`/spending/budget?month=${monthKey}`}
+        className="text-muted-foreground hover:text-foreground text-xs underline-offset-4 hover:underline"
+      >
+        {t("spending:budgetChart.manage")}
+      </Link>
+    </span>
   );
 };
 
