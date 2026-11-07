@@ -51,7 +51,7 @@ import {
   useEnvelopeSnapshot,
 } from "../hooks/use-envelopes";
 import { useSpendingSettings } from "../hooks/use-spending-settings";
-import { FOREST_THEME } from "../lib/theme";
+import { SPENDING_THEME, tint } from "../lib/theme";
 import type {
   EnvelopeBalance,
   EnvelopeCategoryLink,
@@ -65,6 +65,8 @@ import type {
 const SPENDING_TAXONOMY = "spending_categories";
 const INCOME_TAXONOMY = "income_sources";
 const CARD = "bg-card border-border/60 rounded-xl border shadow-sm";
+/** Hex, because <input type="color"> cannot hold a CSS variable. */
+const DEFAULT_COLOR = "#2A573F";
 
 function today() {
   const d = new Date();
@@ -243,7 +245,7 @@ function EnvelopeCard({
   const [linksOpen, setLinksOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const accent = row.envelope.color ?? FOREST_THEME.deep;
+  const accent = row.envelope.color ?? SPENDING_THEME.deep;
   const currency = snapshot.currency;
   const negative = row.balance < 0;
 
@@ -263,7 +265,7 @@ function EnvelopeCard({
         </button>
         <span
           className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md"
-          style={{ backgroundColor: `${accent}1f`, color: accent }}
+          style={{ backgroundColor: tint(accent, 0.12), color: accent }}
         >
           <CategoryIcon icon={row.envelope.icon ?? null} className="h-3.5 w-3.5" />
         </span>
@@ -472,7 +474,7 @@ function EnvelopeDialog({
   const m = useEnvelopeMutations();
   const e = row?.envelope;
   const [name, setName] = useState(e?.name ?? "");
-  const [color, setColor] = useState(e?.color ?? FOREST_THEME.deep);
+  const [color, setColor] = useState(e?.color ?? DEFAULT_COLOR);
   const [startDate, setStartDate] = useState(e?.startDate ?? today());
   const [allowNegative, setAllowNegative] = useState(e?.allowNegative ?? false);
   const [opening, setOpening] = useState("");
@@ -480,7 +482,7 @@ function EnvelopeDialog({
   if (open && key !== (e?.id ?? "new")) {
     setKey(e?.id ?? "new");
     setName(e?.name ?? "");
-    setColor(e?.color ?? FOREST_THEME.deep);
+    setColor(e?.color ?? DEFAULT_COLOR);
     setStartDate(e?.startDate ?? today());
     setAllowNegative(e?.allowNegative ?? false);
     setOpening("");
