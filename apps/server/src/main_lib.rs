@@ -922,6 +922,7 @@ async fn initialize_profile_state(
     let envelope_service = Arc::new(wealthfolio_spending::envelopes::EnvelopeService::new(
         envelope_repo,
         activity_repository.clone(),
+        activity_service.clone(),
         account_repo.clone(),
         activity_assignments_repo.clone(),
         activity_splits_repo.clone(),

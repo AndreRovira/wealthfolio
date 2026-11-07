@@ -1173,7 +1173,11 @@
     "pendingIncomeCount_one": "{{count}} 筆存款待分配",
     "pendingIncomeCount_other": "{{count}} 筆存款待分配",
     "targetsEditor": "預算目標",
-    "dueToday": "今天到期"
+    "dueToday": "今天到期",
+    "noPot": "無信封",
+    "pinned": "已固定",
+    "autoByCategory": "依類別",
+    "pinFailed": "無法設定信封。"
   },
   "savingsPlan": {
     "title": "儲蓄計畫",

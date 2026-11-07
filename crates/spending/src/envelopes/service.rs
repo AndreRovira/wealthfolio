@@ -9,7 +9,7 @@ use uuid::Uuid;
 use wealthfolio_core::accounts::{
     account_supports_purpose, AccountPurpose, AccountRepositoryTrait,
 };
-use wealthfolio_core::activities::ActivityRepositoryTrait;
+use wealthfolio_core::activities::{ActivityRepositoryTrait, ActivityServiceTrait, ActivityUpdate};
 use wealthfolio_core::taxonomies::{Category, TaxonomyServiceTrait};
 use wealthfolio_core::utils::time_utils::activity_date_in_user_timezone;
 
@@ -24,9 +24,12 @@ use crate::settings::SpendingSettingsService;
 const SPENDING_TAXONOMY: &str = "spending_categories";
 const INCOME_TAXONOMY: &str = "income_sources";
 
+pub const ACTIVITY_ENVELOPE_KEY: &str = "envelope";
+
 pub struct EnvelopeService {
     repo: Arc<dyn EnvelopeRepositoryTrait>,
     activity_repo: Arc<dyn ActivityRepositoryTrait>,
+    activity_service: Arc<dyn ActivityServiceTrait + Send + Sync>,
     account_repo: Arc<dyn AccountRepositoryTrait>,
     assignment_repo: Arc<dyn ActivityTaxonomyAssignmentRepositoryTrait>,
     split_repo: Arc<dyn ActivitySplitRepositoryTrait>,
@@ -43,6 +46,7 @@ impl EnvelopeService {
     pub fn new(
         repo: Arc<dyn EnvelopeRepositoryTrait>,
         activity_repo: Arc<dyn ActivityRepositoryTrait>,
+        activity_service: Arc<dyn ActivityServiceTrait + Send + Sync>,
         account_repo: Arc<dyn AccountRepositoryTrait>,
         assignment_repo: Arc<dyn ActivityTaxonomyAssignmentRepositoryTrait>,
         split_repo: Arc<dyn ActivitySplitRepositoryTrait>,
@@ -53,6 +57,7 @@ impl EnvelopeService {
         Self {
             repo,
             activity_repo,
+            activity_service,
             account_repo,
             assignment_repo,
             split_repo,
@@ -234,6 +239,72 @@ impl EnvelopeService {
             })
             .collect::<Vec<_>>();
         self.repo.insert_entries(entries).await
+    }
+
+    /// Pin an activity to a pot, or remove the pin so its category decides.
+    pub async fn set_activity_envelope(
+        &self,
+        activity_id: &str,
+        input: ActivityEnvelopeInput,
+    ) -> Result<()> {
+        let existing = self
+            .activity_service
+            .get_activity(activity_id)
+            .map_err(|e| anyhow!(e.to_string()))?;
+        if let Some(ActivityEnvelope {
+            envelope_id: Some(envelope_id),
+            bill_id,
+        }) = &input.envelope
+        {
+            if !self
+                .repo
+                .list_envelopes()
+                .await?
+                .iter()
+                .any(|e| &e.id == envelope_id)
+            {
+                return Err(anyhow!("envelope {envelope_id} not found"));
+            }
+            if let Some(bill_id) = bill_id {
+                if !self
+                    .repo
+                    .list_bills()
+                    .await?
+                    .iter()
+                    .any(|b| &b.id == bill_id && &b.envelope_id == envelope_id)
+                {
+                    return Err(anyhow!("bill {bill_id} is not in envelope {envelope_id}"));
+                }
+            }
+        }
+        // The patch merges into the stored metadata; `null` keeps the key with
+        // no value, which the snapshot reads as "follow the category".
+        let patch = serde_json::json!({ ACTIVITY_ENVELOPE_KEY: input.envelope }).to_string();
+        self.activity_service
+            .update_activity(ActivityUpdate {
+                unlink_transfer_pair_id: None,
+                split_review: None,
+                id: existing.id.clone(),
+                account_id: existing.account_id.clone(),
+                asset: None,
+                activity_type: existing.activity_type.clone(),
+                subtype: existing.subtype.clone(),
+                activity_date: existing.activity_date.to_rfc3339(),
+                quantity: None,
+                unit_price: None,
+                currency: existing.currency.clone(),
+                fee: None,
+                tax: None,
+                amount: None,
+                status: None,
+                needs_review: None,
+                notes: None,
+                fx_rate: None,
+                metadata: Some(patch),
+            })
+            .await
+            .map_err(|e| anyhow!(e.to_string()))?;
+        Ok(())
     }
 
     // ----------------------------- snapshot -----------------------------
@@ -573,32 +644,46 @@ impl EnvelopeService {
             let amount = activity_abs_amount(activity);
             let spending_native = classification.spending_amount(amount);
             let income_native = classification.income_amount(amount);
-            for allocation in allocations_for_taxonomy(
-                &activity.id,
-                SPENDING_TAXONOMY,
-                spending_native,
-                &assignments,
-                &splits,
-            ) {
-                let Some(link) =
-                    resolve_link(&allocation.category_id, link_by_category, spending_meta)
-                else {
-                    continue;
-                };
+            // A pinned activity goes whole to its pot (or to none); otherwise
+            // each category allocation follows its link.
+            let pots: Vec<(PotKey, Decimal)> = match activity_pin(activity) {
+                Some(ActivityEnvelope {
+                    envelope_id: Some(envelope_id),
+                    bill_id,
+                }) if spending_native != Decimal::ZERO => {
+                    vec![((envelope_id, bill_id), spending_native)]
+                }
+                Some(_) => Vec::new(),
+                None => allocations_for_taxonomy(
+                    &activity.id,
+                    SPENDING_TAXONOMY,
+                    spending_native,
+                    &assignments,
+                    &splits,
+                )
+                .into_iter()
+                .filter_map(|allocation| {
+                    let link =
+                        resolve_link(&allocation.category_id, link_by_category, spending_meta)?;
+                    Some((
+                        (link.envelope_id.clone(), link.bill_id.clone()),
+                        allocation.amount,
+                    ))
+                })
+                .collect(),
+            };
+            for ((envelope_id, bill_id), native) in pots {
                 if start_by_envelope
-                    .get(link.envelope_id.as_str())
+                    .get(envelope_id.as_str())
                     .is_some_and(|start| local_date < *start)
                 {
                     continue;
                 }
-                let converted =
-                    crate::fx::convert(fx, allocation.amount, &activity.currency, currency, as_of)
-                        .unwrap_or(Decimal::ZERO);
-                *spent
-                    .entry((link.envelope_id.clone(), link.bill_id.clone()))
-                    .or_default() += converted;
+                let converted = crate::fx::convert(fx, native, &activity.currency, currency, as_of)
+                    .unwrap_or(Decimal::ZERO);
+                *spent.entry((envelope_id.clone(), bill_id)).or_default() += converted;
                 if local_date >= month_start {
-                    *spent_month.entry(link.envelope_id.clone()).or_default() += converted;
+                    *spent_month.entry(envelope_id).or_default() += converted;
                 }
             }
             if income_native != Decimal::ZERO {
@@ -636,6 +721,15 @@ impl EnvelopeService {
             .map(|t| t.categories)
             .unwrap_or_default())
     }
+}
+
+/// The pot an activity was pinned to, if any.
+fn activity_pin(activity: &wealthfolio_core::activities::Activity) -> Option<ActivityEnvelope> {
+    let value = activity.metadata.as_ref()?.get(ACTIVITY_ENVELOPE_KEY)?;
+    if value.is_null() {
+        return None;
+    }
+    serde_json::from_value(value.clone()).ok()
 }
 
 /// The link for a category: its own, else the nearest linked ancestor.

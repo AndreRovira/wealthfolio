@@ -1173,7 +1173,11 @@
     "pendingIncomeCount_one": "{{count}} deposit to split",
     "pendingIncomeCount_other": "{{count}} deposits to split",
     "targetsEditor": "Budget targets",
-    "dueToday": "due today"
+    "dueToday": "due today",
+    "noPot": "No envelope",
+    "pinned": "pinned",
+    "autoByCategory": "By category",
+    "pinFailed": "Failed to set the envelope."
   },
   "savingsPlan": {
     "title": "Savings plan",

@@ -190,6 +190,18 @@ async fn savings(
     ))
 }
 
+async fn set_activity_envelope(
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
+    Path(id): Path<String>,
+    Json(input): Json<ActivityEnvelopeInput>,
+) -> ApiResult<()> {
+    state
+        .envelope_service
+        .set_activity_envelope(&id, input)
+        .await?;
+    Ok(())
+}
+
 pub fn router<S: Clone + Send + Sync + 'static>() -> Router<S> {
     Router::new()
         .route("/spending/savings", get(savings))
@@ -233,4 +245,8 @@ pub fn router<S: Clone + Send + Sync + 'static>() -> Router<S> {
             axum::routing::put(update_rule).delete(delete_rule),
         )
         .route("/spending/envelopes/apply-income", post(apply_income))
+        .route(
+            "/spending/envelopes/activity/{id}",
+            axum::routing::put(set_activity_envelope),
+        )
 }

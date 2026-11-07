@@ -4,6 +4,7 @@ import { profileFetch } from "@/features/profiles/session";
 import { notifyUnauthorized } from "@/lib/auth-token";
 
 import type {
+  ActivityEnvelope,
   ApplyIncomeInput,
   EntryInput,
   Envelope,
@@ -71,3 +72,5 @@ export const updateRule = (id: string, input: FundingRuleInput) =>
 export const deleteRule = (id: string) => request<void>("DELETE", `/rules/${id}`);
 export const applyIncome = (input: ApplyIncomeInput) =>
   request<EnvelopeEntry[]>("POST", "/apply-income", input);
+export const setActivityEnvelope = (activityId: string, envelope: ActivityEnvelope | null) =>
+  request<void>("PUT", `/activity/${activityId}`, { envelope });

@@ -164,3 +164,9 @@ export interface ApplyIncomeInput {
   entryDate: string;
   splits: ProposedSplit[];
 }
+
+/** Pin stored in activity metadata under `envelope`; envelopeId null = no pot. */
+export interface ActivityEnvelope {
+  envelopeId: string | null;
+  billId: string | null;
+}

@@ -289,3 +289,22 @@ pub struct ApplyIncomeInput {
     pub entry_date: NaiveDate,
     pub splits: Vec<ProposedSplit>,
 }
+
+/// Per-activity pot override, stored in the activity's metadata under
+/// `envelope`. `envelope_id` None means "no pot at all"; absent key means
+/// "follow the category link".
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActivityEnvelope {
+    pub envelope_id: Option<String>,
+    #[serde(default)]
+    pub bill_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActivityEnvelopeInput {
+    /// Some(envelope) pins the activity to a pot (envelope_id None = no pot);
+    /// None removes the override.
+    pub envelope: Option<ActivityEnvelope>,
+}

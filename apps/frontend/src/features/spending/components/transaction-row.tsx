@@ -19,6 +19,7 @@ import {
 import { getTransactionDisplay, type TransactionRowVM } from "../lib/transactions-helpers";
 import { CategoryIconTile } from "./category-chips";
 import { QuickCategorizePopover } from "./quick-categorize-popover";
+import { QuickEnvelopePopover } from "./quick-envelope-popover";
 import { QuickEventPopover } from "./quick-event-popover";
 import { TransactionRowActions } from "./transaction-row-actions";
 import {
@@ -244,6 +245,13 @@ function TransactionRowImpl({
             }
           />
         )}
+        <QuickEnvelopePopover
+          activityId={a.id}
+          categoryId={row.category?.id ?? null}
+          metadata={a.metadata}
+          isExpense={isOutflow && !isSaving && !isNeutral}
+          className="-mx-1 mt-0.5 flex"
+        />
       </TableCell>
       <TableCell
         className={cn(
