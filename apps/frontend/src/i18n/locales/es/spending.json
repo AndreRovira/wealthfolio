@@ -1218,6 +1218,7 @@
     "splitHintIncome": "Primero los montos fijos; los porcentajes aplican sobre lo que queda.",
     "splitHintFixed": "Monto fijo por apartado en cada ciclo.",
     "addSplit": "Agregar línea",
-    "active": "Activa"
+    "active": "Activa",
+    "cadenceSemimonthly": "Quincenal, 15 y fin de mes"
   }
 }

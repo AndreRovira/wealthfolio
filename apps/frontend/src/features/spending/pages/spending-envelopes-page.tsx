@@ -1172,6 +1172,7 @@ function RulesSheet({
   const [editing, setEditing] = useState<{ open: boolean; rule?: FundingRule }>({ open: false });
   const cadenceLabel: Record<FundingCadence, string> = {
     biweekly: t("spending:envelopes.cadenceBiweekly"),
+    semimonthly: t("spending:envelopes.cadenceSemimonthly"),
     monthly: t("spending:envelopes.cadenceMonthly"),
     on_income: t("spending:envelopes.cadenceOnIncome"),
   };
@@ -1196,7 +1197,7 @@ function RulesSheet({
                 </div>
                 <div className="text-muted-foreground truncate">
                   {cadenceLabel[r.cadence]}
-                  {r.cadence === "biweekly" &&
+                  {(r.cadence === "biweekly" || r.cadence === "semimonthly") &&
                     r.anchorDate &&
                     ` · ${t("spending:envelopes.from")} ${r.anchorDate}`}
                   {r.cadence === "monthly" &&
@@ -1322,6 +1323,7 @@ function RuleDialog({
                 onValueChange={(v) => setCadence(v as FundingCadence)}
                 options={[
                   { value: "biweekly", label: t("spending:envelopes.cadenceBiweekly") },
+                  { value: "semimonthly", label: t("spending:envelopes.cadenceSemimonthly") },
                   { value: "monthly", label: t("spending:envelopes.cadenceMonthly") },
                   { value: "on_income", label: t("spending:envelopes.cadenceOnIncome") },
                 ]}

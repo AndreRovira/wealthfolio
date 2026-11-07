@@ -443,25 +443,16 @@ impl EnvelopeService {
                         .day_of_month
                         .unwrap_or(anchor.day() as i32)
                         .clamp(1, 31) as u32;
-                    let mut out = Vec::new();
-                    let (mut y, mut m) = (anchor.year(), anchor.month());
-                    loop {
-                        let d = clamp_day(y, m, day);
-                        if d > as_of {
-                            break;
-                        }
-                        if d >= anchor {
-                            out.push((d, format!("{y:04}-{m:02}")));
-                        }
-                        if m == 12 {
-                            y += 1;
-                            m = 1;
-                        } else {
-                            m += 1;
-                        }
-                    }
-                    out
+                    month_walk(anchor, as_of, |y, m| {
+                        vec![(clamp_day(y, m, day), format!("{y:04}-{m:02}"))]
+                    })
                 }
+                FundingCadence::Semimonthly => month_walk(anchor, as_of, |y, m| {
+                    vec![
+                        (clamp_day(y, m, 15), format!("{y:04}-{m:02}-a")),
+                        (clamp_day(y, m, 31), format!("{y:04}-{m:02}-b")),
+                    ]
+                }),
                 FundingCadence::OnIncome => Vec::new(),
             };
             for (date, period_key) in periods {
@@ -702,6 +693,31 @@ pub fn compute_splits(splits: &[FundingSplit], amount: Decimal) -> Vec<ProposedS
         .collect()
 }
 
+/// Candidate dates per month from the anchor's month up to `as_of`, keeping
+/// only those inside [anchor, as_of].
+fn month_walk(
+    anchor: NaiveDate,
+    as_of: NaiveDate,
+    dates_in: impl Fn(i32, u32) -> Vec<(NaiveDate, String)>,
+) -> Vec<(NaiveDate, String)> {
+    let mut out = Vec::new();
+    let (mut y, mut m) = (anchor.year(), anchor.month());
+    while NaiveDate::from_ymd_opt(y, m, 1).is_some_and(|first| first <= as_of) {
+        out.extend(
+            dates_in(y, m)
+                .into_iter()
+                .filter(|(d, _)| *d >= anchor && *d <= as_of),
+        );
+        if m == 12 {
+            y += 1;
+            m = 1;
+        } else {
+            m += 1;
+        }
+    }
+    out
+}
+
 fn clamp_day(year: i32, month: u32, day: u32) -> NaiveDate {
     // Walk down from `day` until the date exists; day 1 always does.
     (1..=day.clamp(1, 31))
@@ -795,6 +811,31 @@ mod tests {
         assert_eq!(out[1].amount, 4875.0);
         assert_eq!(out[2].amount, 4875.0);
         assert_eq!(out[3].amount, 100.0);
+    }
+
+    #[test]
+    fn semimonthly_walk_hits_15th_and_month_end() {
+        let anchor = NaiveDate::from_ymd_opt(2026, 11, 15).unwrap();
+        let as_of = NaiveDate::from_ymd_opt(2027, 1, 20).unwrap();
+        let dates = month_walk(anchor, as_of, |y, m| {
+            vec![
+                (clamp_day(y, m, 15), "a".into()),
+                (clamp_day(y, m, 31), "b".into()),
+            ]
+        })
+        .into_iter()
+        .map(|(d, _)| d.to_string())
+        .collect::<Vec<_>>();
+        assert_eq!(
+            dates,
+            [
+                "2026-11-15",
+                "2026-11-30",
+                "2026-12-15",
+                "2026-12-31",
+                "2027-01-15"
+            ]
+        );
     }
 
     #[test]

@@ -1159,6 +1159,7 @@
     "splitHintIncome": "Fixed amounts are taken first; percents apply to what is left.",
     "splitHintFixed": "Fixed amount per pot on every cycle.",
     "addSplit": "Add line",
-    "active": "Active"
+    "active": "Active",
+    "cadenceSemimonthly": "15th and last day"
   }
 }

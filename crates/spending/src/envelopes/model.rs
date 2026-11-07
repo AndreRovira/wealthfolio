@@ -154,6 +154,8 @@ pub struct MoveInput {
 pub enum FundingCadence {
     /// Every 14 days from `anchor_date`.
     Biweekly,
+    /// The 15th and the last day of every month, from `anchor_date`.
+    Semimonthly,
     /// Once a month on `day_of_month` (clamped to month length).
     Monthly,
     /// Proposed when a deposit assigned to `income_category_id` lands.
@@ -164,6 +166,7 @@ impl FundingCadence {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Biweekly => "biweekly",
+            Self::Semimonthly => "semimonthly",
             Self::Monthly => "monthly",
             Self::OnIncome => "on_income",
         }
@@ -171,6 +174,7 @@ impl FundingCadence {
     pub fn parse(s: &str) -> Option<Self> {
         match s {
             "biweekly" => Some(Self::Biweekly),
+            "semimonthly" => Some(Self::Semimonthly),
             "monthly" => Some(Self::Monthly),
             "on_income" => Some(Self::OnIncome),
             _ => None,
