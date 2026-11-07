@@ -498,6 +498,7 @@ const AccountPage = () => {
     dateRange,
     { type: "account", accountId: id },
   );
+  const hasValuationHistory = (valuationHistory?.length ?? 0) > 0;
   const {
     currentValuation: liveCurrentValuation,
     isLoading: isCurrentValuationLoading,
@@ -1050,7 +1051,9 @@ const AccountPage = () => {
         </div>
       </PageHeader>
       <PageContent>
-        {hasHoldings && !isHoldingsLoading ? (
+        {/* A closed account (everything sold, cash 0) has no holdings but still
+            has history worth showing: the chart, performance and activities. */}
+        {(hasHoldings || hasValuationHistory) && !isHoldingsLoading ? (
           <>
             <div className="grid grid-cols-1 gap-4 pt-0 lg:grid-cols-3">
               <Card className="col-span-1 overflow-hidden lg:col-span-2">
