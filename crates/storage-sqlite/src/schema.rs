@@ -741,6 +741,77 @@ diesel::table! {
 }
 
 diesel::table! {
+    envelopes (id) {
+        id -> Text,
+        name -> Text,
+        color -> Nullable<Text>,
+        icon -> Nullable<Text>,
+        sort_order -> Integer,
+        allow_negative -> Integer,
+        start_date -> Text,
+        archived -> Integer,
+        created_at -> Text,
+        updated_at -> Text,
+    }
+}
+
+diesel::table! {
+    envelope_bills (id) {
+        id -> Text,
+        envelope_id -> Text,
+        name -> Text,
+        expected_amount -> Text,
+        due_day -> Nullable<Integer>,
+        cycle -> Text,
+        sort_order -> Integer,
+        archived -> Integer,
+        created_at -> Text,
+        updated_at -> Text,
+    }
+}
+
+diesel::table! {
+    envelope_category_links (category_id) {
+        category_id -> Text,
+        envelope_id -> Text,
+        bill_id -> Nullable<Text>,
+        created_at -> Text,
+    }
+}
+
+diesel::table! {
+    envelope_entries (id) {
+        id -> Text,
+        envelope_id -> Text,
+        bill_id -> Nullable<Text>,
+        entry_date -> Text,
+        amount -> Text,
+        kind -> Text,
+        note -> Nullable<Text>,
+        move_id -> Nullable<Text>,
+        rule_id -> Nullable<Text>,
+        period_key -> Nullable<Text>,
+        activity_id -> Nullable<Text>,
+        created_at -> Text,
+    }
+}
+
+diesel::table! {
+    envelope_funding_rules (id) {
+        id -> Text,
+        name -> Text,
+        cadence -> Text,
+        anchor_date -> Nullable<Text>,
+        day_of_month -> Nullable<Integer>,
+        income_category_id -> Nullable<Text>,
+        splits_json -> Text,
+        active -> Integer,
+        created_at -> Text,
+        updated_at -> Text,
+    }
+}
+
+diesel::table! {
     portfolios (id) {
         id -> Text,
         name -> Text,
@@ -891,6 +962,9 @@ diesel::joinable!(spending_categorization_rules -> accounts (account_id));
 diesel::joinable!(spending_categorization_rules -> taxonomies (taxonomy_id));
 diesel::joinable!(budget_group_assignments -> budget_groups (group_id));
 diesel::joinable!(budget_group_assignments -> taxonomies (taxonomy_id));
+diesel::joinable!(envelope_bills -> envelopes (envelope_id));
+diesel::joinable!(envelope_category_links -> envelopes (envelope_id));
+diesel::joinable!(envelope_entries -> envelopes (envelope_id));
 diesel::joinable!(budget_targets -> budget_groups (group_id));
 diesel::joinable!(budget_targets -> taxonomies (taxonomy_id));
 diesel::joinable!(budget_rollover_settings -> budget_groups (group_id));
@@ -900,6 +974,11 @@ diesel::joinable!(import_account_templates -> import_templates (template_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     import_account_templates,
+    envelopes,
+    envelope_bills,
+    envelope_category_links,
+    envelope_entries,
+    envelope_funding_rules,
     accounts,
     portfolios,
     portfolio_accounts,

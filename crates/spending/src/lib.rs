@@ -35,6 +35,7 @@ pub mod cash_activities;
 pub mod categories_seed;
 pub mod categorization_rules;
 mod category_exclusions;
+pub mod envelopes;
 pub mod error;
 pub mod events;
 mod fx;

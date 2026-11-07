@@ -47,6 +47,7 @@ mod database_backups;
 mod device_sync;
 #[cfg(feature = "device-sync")]
 pub(crate) mod device_sync_engine;
+mod envelopes;
 mod exchange_rates;
 mod goals;
 mod health;
@@ -217,6 +218,7 @@ fn app_router_with_profiles(
         .merge(health::router())
         .merge(custom_providers::router())
         .merge(spending::router())
+        .merge(envelopes::router())
         .merge(allocation_targets::router())
         .merge(agent_access::router());
 

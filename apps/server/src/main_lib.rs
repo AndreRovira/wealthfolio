@@ -147,6 +147,7 @@ pub struct AppState {
         Arc<wealthfolio_spending::categorization_rules::CategorizationRulesService>,
     pub events_service: Arc<wealthfolio_spending::events::EventsService>,
     pub budget_service: Arc<wealthfolio_spending::budget::BudgetService>,
+    pub envelope_service: Arc<wealthfolio_spending::envelopes::EnvelopeService>,
     pub spending_analytics_service: Arc<wealthfolio_spending::analytics::AnalyticsService>,
     pub spending_insight_service: Arc<wealthfolio_spending::insight::InsightService>,
     pub allocation_target_service: Arc<
@@ -908,6 +909,25 @@ async fn initialize_profile_state(
         fx_service.clone(),
     ));
 
+    // Spending: envelopes (fork feature)
+    let envelope_repo: Arc<dyn wealthfolio_spending::envelopes::EnvelopeRepositoryTrait> =
+        Arc::new(
+            wealthfolio_storage_sqlite::spending::envelopes::EnvelopeRepository::new(
+                pool.clone(),
+                writer.clone(),
+            ),
+        );
+    let envelope_service = Arc::new(wealthfolio_spending::envelopes::EnvelopeService::new(
+        envelope_repo,
+        activity_repository.clone(),
+        account_repo.clone(),
+        activity_assignments_repo.clone(),
+        activity_splits_repo.clone(),
+        spending_settings_service.clone(),
+        taxonomy_service.clone(),
+        fx_service.clone(),
+    ));
+
     // Spending: analytics
     let analytics_assignment_repo: Arc<
         dyn wealthfolio_spending::activity_assignments::ActivityTaxonomyAssignmentRepositoryTrait,
@@ -1190,6 +1210,7 @@ async fn initialize_profile_state(
         categorization_rules_service,
         events_service,
         budget_service,
+        envelope_service,
         spending_analytics_service,
         spending_insight_service,
         allocation_target_service,
