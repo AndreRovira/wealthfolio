@@ -1063,7 +1063,9 @@
     "addSource_other": "Add source ({{count}} available)",
     "overridesTitle_one": "Override · {{count}}",
     "overridesTitle_other": "Overrides · {{count}}",
-    "sourceMonth": "Source month"
+    "sourceMonth": "Source month",
+    "balance": "Balance",
+    "carriedIn": "carried in"
   },
   "splitEditReview": {
     "title": "Review split removal",

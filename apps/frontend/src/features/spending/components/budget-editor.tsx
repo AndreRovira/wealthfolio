@@ -583,16 +583,31 @@ function GroupBudgetSection({
             <span className="text-muted-foreground text-2xs tabular-nums">
               <PrivacyAmount value={row.actual} currency={currency} /> /{" "}
               <PrivacyAmount value={row.plannedTotal} currency={currency} />
+              {mode !== "setup" && row.rolloverIn !== 0 && (
+                <>
+                  {" · "}
+                  {t("spending:budgetEditor.carriedIn")}{" "}
+                  <PrivacyAmount value={row.rolloverIn} currency={currency} />
+                </>
+              )}
             </span>
           </div>
         </button>
 
         <div className="text-end">
-          <div className="text-sm font-semibold tabular-nums">
-            <PrivacyAmount value={row.plannedTotal} currency={currency} />
+          <div
+            className={cn(
+              "text-sm font-semibold tabular-nums",
+              mode !== "setup" && row.remaining < 0 && "text-destructive",
+            )}
+          >
+            <PrivacyAmount
+              value={mode === "setup" ? row.plannedTotal : row.remaining}
+              currency={currency}
+            />
           </div>
           <div className="text-muted-foreground text-2xs tracking-wide uppercase">
-            {totalSuffix}
+            {mode === "setup" ? totalSuffix : t("spending:budgetEditor.balance")}
           </div>
         </div>
 
@@ -1190,6 +1205,33 @@ function BudgetCategoryLine({
           </Tooltip>
         )}
       </div>
+
+      {monthMode && (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <span
+                className={cn(
+                  "w-20 shrink-0 text-end tabular-nums",
+                  row.remaining < 0 ? "text-destructive" : "text-muted-foreground",
+                )}
+              />
+            }
+          >
+            <PrivacyAmount value={row.remaining} currency={currency} />
+          </TooltipTrigger>
+          <TooltipContent side="top" sideOffset={4} className="text-xs">
+            {t("spending:budgetEditor.balance")}
+            {row.rolloverIn !== 0 && (
+              <>
+                {" · "}
+                {t("spending:budgetEditor.carriedIn")}{" "}
+                <PrivacyAmount value={row.rolloverIn} currency={currency} />
+              </>
+            )}
+          </TooltipContent>
+        </Tooltip>
+      )}
 
       <span className="text-muted-foreground text-2xs hidden w-8 shrink-0 text-end tabular-nums sm:inline">
         {numberFormatting.formatPercent(sharePct, { digits: 0 })}

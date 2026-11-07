@@ -326,6 +326,7 @@ impl BudgetService {
         };
 
         let mut rows_by_group: HashMap<String, Vec<BudgetCategoryRow>> = HashMap::new();
+        let mut category_rollovers: HashMap<String, (Decimal, Decimal)> = HashMap::new();
         for category in &top_spending_categories {
             let group_id = group_for_category(&category.id);
             let actual = current_actuals
@@ -337,9 +338,10 @@ impl BudgetService {
                 SPENDING_TAXONOMY,
                 &category.id,
             );
-            let rollover = is_month_view
-                .then(|| rollover_index.category(SPENDING_TAXONOMY, &category.id))
-                .flatten();
+            // The setting is reported in every view so the Defaults editor shows
+            // the real toggle state; the carried amounts only exist per month.
+            let rollover_setting = rollover_index.category(SPENDING_TAXONOMY, &category.id);
+            let rollover = is_month_view.then_some(rollover_setting).flatten();
             let (rollover_in, rollover_out, remaining) = if let Some(setting) = rollover {
                 compute_rollover_for_month(
                     setting,
@@ -364,6 +366,7 @@ impl BudgetService {
             } else {
                 (Decimal::ZERO, Decimal::ZERO, target - actual)
             };
+            category_rollovers.insert(category.id.clone(), (rollover_in, rollover_out));
             rows_by_group
                 .entry(group_id.clone())
                 .or_default()
@@ -388,7 +391,7 @@ impl BudgetService {
                         SPENDING_TAXONOMY,
                         &category.id,
                     ),
-                    rollover_enabled: rollover.is_some(),
+                    rollover_enabled: rollover_setting.is_some(),
                 });
         }
 
@@ -432,9 +435,8 @@ impl BudgetService {
             let actual = decimal_to_f64(actual_decimal);
             let buffer = decimal_to_f64(buffer_decimal);
             let planned_total = decimal_to_f64(planned_total_decimal);
-            let rollover = is_month_view
-                .then(|| rollover_index.group(&group.id))
-                .flatten();
+            let rollover_setting = rollover_index.group(&group.id);
+            let rollover = is_month_view.then_some(rollover_setting).flatten();
             let (rollover_in, rollover_out, remaining) = if let Some(setting) = rollover {
                 compute_rollover_for_month(
                     setting,
@@ -468,10 +470,19 @@ impl BudgetService {
                     },
                 )
             } else {
+                // No group-wide rollover: the group still carries whatever its
+                // categories roll over on their own, so the group balance is
+                // the sum of its category balances plus the buffer.
+                let (category_rollover_in, category_rollover_out) = category_ids
+                    .iter()
+                    .filter_map(|id| category_rollovers.get(id))
+                    .fold((Decimal::ZERO, Decimal::ZERO), |(i, o), (ci, co)| {
+                        (i + ci, o + co)
+                    });
                 (
-                    Decimal::ZERO,
-                    Decimal::ZERO,
-                    planned_total_decimal - actual_decimal,
+                    category_rollover_in,
+                    category_rollover_out,
+                    planned_total_decimal - actual_decimal + category_rollover_in,
                 )
             };
             spending_planned_total += planned_total_decimal;
@@ -490,7 +501,7 @@ impl BudgetService {
                 rollover_out: decimal_to_f64(rollover_out),
                 remaining: decimal_to_f64(remaining),
                 overspent: remaining < Decimal::ZERO,
-                rollover_enabled: rollover.is_some(),
+                rollover_enabled: rollover_setting.is_some(),
                 categories,
             });
         }
