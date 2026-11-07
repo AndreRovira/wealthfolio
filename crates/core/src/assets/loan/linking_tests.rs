@@ -98,7 +98,7 @@ fn only_a_qualifying_withdrawal_can_be_linked() {
     dollars.currency = "USD".into();
     assert_eq!(refused(&dollars, "CASH"), LoanError::PaymentNotEligible);
     assert_eq!(
-        refused(&withdrawal(None), "CREDIT_CARD"),
+        refused(&withdrawal(None), "SECURITIES"),
         LoanError::PaymentNotEligible
     );
 }

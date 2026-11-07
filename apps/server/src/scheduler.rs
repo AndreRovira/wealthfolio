@@ -195,6 +195,28 @@ pub fn start_background_workers(state: Arc<AppState>) {
     // Start background broker sync scheduler (4-hour interval)
     start_broker_sync_scheduler(state.clone());
 
+    // MSI instalments: post whatever came due, 2 min after start and then daily.
+    let msi_state = state.clone();
+    let worker = tokio::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_secs(120)).await;
+        let mut every_day = tokio::time::interval(std::time::Duration::from_secs(24 * 60 * 60));
+        loop {
+            every_day.tick().await;
+            match crate::api::msi::post_due_instalments(&msi_state, None).await {
+                Ok(posted) if !posted.is_empty() => {
+                    info!("MSI: posted {} instalment(s)", posted.len())
+                }
+                Ok(_) => {}
+                Err(error) => tracing::warn!("MSI: posting instalments failed: {error}"),
+            }
+        }
+    });
+    state
+        .workers
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .push(worker);
+
     // Periodic market data sync plus portfolio update (6h interval, 2min
     // initial delay): the coordinator rebuilds whatever the sync made stale.
     let worker = crate::api::shared::spawn_periodic_update(state.clone());

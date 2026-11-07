@@ -54,6 +54,7 @@ mod health;
 mod holdings;
 mod limits;
 mod market_data;
+pub(crate) mod msi;
 mod net_worth;
 mod performance;
 pub(crate) mod portable_backups;
@@ -219,6 +220,7 @@ fn app_router_with_profiles(
         .merge(custom_providers::router())
         .merge(spending::router())
         .merge(envelopes::router())
+        .merge(msi::router())
         .merge(allocation_targets::router())
         .merge(agent_access::router());
 

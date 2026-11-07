@@ -87,7 +87,9 @@ pub struct LoanPayment {
 }
 
 /// Rule 2: the amount of a posted withdrawal, after any type override, in a
-/// cash account in the loan's currency; anything else cannot be a payment.
+/// cash or credit card account in the loan's currency; anything else cannot be
+/// a payment. A card withdrawal is how an interest-free instalment plan (MSI)
+/// settles: the bank charges each instalment to the card.
 pub(super) fn payment_amount_of(
     activity: &Activity,
     account_type: &str,
@@ -96,7 +98,7 @@ pub(super) fn payment_amount_of(
     let amount = activity.amount?.abs().to_f64()?;
     (activity.is_posted()
         && activity.effective_type() == ACTIVITY_TYPE_WITHDRAWAL
-        && account_type == account_types::CASH
+        && (account_type == account_types::CASH || account_type == account_types::CREDIT_CARD)
         && activity.currency == loan_currency
         && amount > 0.0)
         .then_some(amount)

@@ -11,7 +11,7 @@
 use std::sync::{Arc, RwLock};
 
 use async_trait::async_trait;
-use chrono::{TimeZone, Utc};
+use chrono::{NaiveDate, TimeZone, Utc};
 use log::debug;
 use rust_decimal::Decimal;
 use serde_json::{json, Value};
@@ -27,8 +27,8 @@ use super::alternative_assets_traits::{
 };
 use super::loan::{
     apply_loan_action, apply_loan_setup, link_payment, manual_loan_principal, preview_loan_terms,
-    AssetDetailsChange, LoanAction, LoanActionResult, LoanBalanceSource, LoanError, LoanPayment,
-    LoanRecord, LoanSchedulePreview, LoanSetup, LoanSummary, PaymentLink, LOAN_FIELDS,
+    AssetDetailsChange, LoanAction, LoanActionResult, LoanBalanceSource, LoanError, LoanInstalment,
+    LoanPayment, LoanRecord, LoanSchedulePreview, LoanSetup, LoanSummary, PaymentLink, LOAN_FIELDS,
 };
 use super::{Asset, AssetKind, AssetRepositoryTrait, NewAsset, QuoteMode};
 use crate::errors::{Error, Result, ValidationError};
@@ -793,6 +793,57 @@ impl AlternativeAssetServiceTrait for AlternativeAssetService {
             .unwrap_or_default()
             .iter()
             .map(|payment| payment.dated(timezone))
+            .collect())
+    }
+
+    fn get_loan_instalments(
+        &self,
+        asset_id: &str,
+        as_of: NaiveDate,
+    ) -> Result<Vec<LoanInstalment>> {
+        let asset = self.asset_repository.get_by_id(asset_id)?;
+        let metadata = asset.metadata.unwrap_or_else(|| json!({}));
+        if metadata.get(super::loan::LOAN_PROJECTION_KEY).is_none() {
+            return Ok(Vec::new());
+        }
+        let history = self.quote_service.get_historical_quotes(asset_id)?;
+        let timezone = self.timezone();
+        let payments: Vec<LoanPayment> = self
+            .alternative_asset_repository
+            .loan_payments(&[asset_id.to_string()])?
+            .remove(asset_id)
+            .unwrap_or_default()
+            .iter()
+            .map(|payment| payment.dated(timezone))
+            .collect();
+        let Some(calculation) =
+            super::loan::loan_calculation(&metadata, &history, &payments, as_of)
+        else {
+            return Ok(Vec::new());
+        };
+        // Statuses only exist from the first counted payment on (rule 9); the
+        // schedule itself still says what is due, so unpaid-so-far instalments
+        // come straight from the scheduled rows.
+        let known: std::collections::HashMap<NaiveDate, &LoanInstalment> = calculation
+            .instalments
+            .iter()
+            .map(|i| (i.due_date, i))
+            .collect();
+        Ok(calculation
+            .rows
+            .iter()
+            .filter(|row| row.scheduled_payment && row.date <= as_of)
+            .map(|row| {
+                known
+                    .get(&row.date)
+                    .map(|i| (*i).clone())
+                    .unwrap_or(LoanInstalment {
+                        due_date: row.date,
+                        scheduled: row.payment,
+                        paid: 0.0,
+                        status: super::loan::InstalmentStatus::Due,
+                    })
+            })
             .collect())
     }
 

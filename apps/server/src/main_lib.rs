@@ -148,6 +148,7 @@ pub struct AppState {
     pub events_service: Arc<wealthfolio_spending::events::EventsService>,
     pub budget_service: Arc<wealthfolio_spending::budget::BudgetService>,
     pub envelope_service: Arc<wealthfolio_spending::envelopes::EnvelopeService>,
+    pub msi_service: Arc<wealthfolio_spending::msi::MsiService>,
     pub spending_analytics_service: Arc<wealthfolio_spending::analytics::AnalyticsService>,
     pub spending_insight_service: Arc<wealthfolio_spending::insight::InsightService>,
     pub allocation_target_service: Arc<
@@ -981,6 +982,15 @@ async fn initialize_profile_state(
         .with_event_sink(domain_event_sink.clone()),
     );
 
+    // Spending: MSI instalment plans on credit cards (fork feature)
+    let msi_service = Arc::new(wealthfolio_spending::msi::MsiService::new(
+        activity_service.clone(),
+        account_repo.clone(),
+        alternative_asset_service.clone(),
+        activity_taxonomy_assignment_service.clone(),
+        taxonomy_service.clone(),
+    ));
+
     // Custom asset logo overrides
     let asset_logo_service: Arc<dyn AssetLogoServiceTrait + Send + Sync> =
         Arc::new(AssetLogoService::new(
@@ -1211,6 +1221,7 @@ async fn initialize_profile_state(
         events_service,
         budget_service,
         envelope_service,
+        msi_service,
         spending_analytics_service,
         spending_insight_service,
         allocation_target_service,

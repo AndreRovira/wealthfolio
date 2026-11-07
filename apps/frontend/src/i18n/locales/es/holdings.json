@@ -255,5 +255,18 @@
     "status_update_balance": "Actualizar saldo",
     "update_balance": "Actualizar saldo",
     "schedule": "Calendario"
+  },
+  "msi": {
+    "title": "Cargo de tarjeta a MSI",
+    "description": "Convierte un cargo de tarjeta en meses sin intereses: un préstamo a tasa cero más un abono igual en la tarjeta. Cada mensualidad se carga sola a la tarjeta en su fecha.",
+    "charge": "Cargo de tarjeta",
+    "pickCharge": "Elige un cargo",
+    "noCharges": "No hay cargos sin convertir en los últimos 120 días.",
+    "months": "Meses",
+    "firstDue": "Primera mensualidad",
+    "name": "Nombre",
+    "preview": "{{months}} mensualidades de",
+    "convert": "Convertir",
+    "converted": "MSI creado"
   }
 }

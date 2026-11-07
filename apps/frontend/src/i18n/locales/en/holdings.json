@@ -254,5 +254,18 @@
     "status_update_balance": "Update balance",
     "update_balance": "Update balance",
     "schedule": "Schedule"
+  },
+  "msi": {
+    "title": "Card charge to MSI",
+    "description": "Turns a posted card charge into an interest-free instalment plan: a zero-rate loan plus a matching card credit. Each instalment is charged to the card on its due date by itself.",
+    "charge": "Card charge",
+    "pickCharge": "Pick a charge",
+    "noCharges": "No unconverted card charges in the last 120 days.",
+    "months": "Months",
+    "firstDue": "First instalment",
+    "name": "Name",
+    "preview": "{{months}} instalments of",
+    "convert": "Convert",
+    "converted": "MSI created"
   }
 }

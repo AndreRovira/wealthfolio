@@ -412,7 +412,8 @@ fn anything_that_stops_qualifying_is_ignored() {
     };
     assert!(counts(&withdrawal(tag()), "CASH", "CAD"));
     assert!(!counts(&withdrawal(None), "CASH", "CAD"));
-    assert!(!counts(&withdrawal(tag()), "CREDIT_CARD", "CAD"));
+    assert!(counts(&withdrawal(tag()), "CREDIT_CARD", "CAD"));
+    assert!(!counts(&withdrawal(tag()), "SECURITIES", "CAD"));
     assert!(!counts(&withdrawal(tag()), "CASH", "USD"));
     let mut pending = withdrawal(tag());
     pending.status = ActivityStatus::Pending;

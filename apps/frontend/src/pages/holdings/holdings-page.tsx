@@ -60,6 +60,7 @@ import {
   getHoldingTypeFilterValue,
   getHoldingTypeTranslationKey,
 } from "./components/holdings-type-filter";
+import { MsiConvertDialog } from "./components/msi-convert-dialog";
 import {
   AlternativeAssetQuickAddModal,
   AssetDetailsSheet,
@@ -138,6 +139,7 @@ export const HoldingsPage = () => {
   // Mobile filter state
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [isAlternativeAssetModalOpen, setIsAlternativeAssetModalOpen] = useState(false);
+  const [isMsiDialogOpen, setIsMsiDialogOpen] = useState(false);
   const [sortBy, setSortBy] = usePersistentState<"symbol" | "marketValue">(
     "holdings-sort-by",
     "marketValue",
@@ -463,6 +465,11 @@ export const HoldingsPage = () => {
             },
           },
           {
+            icon: Icons.Calendar,
+            label: t("holdings:msi.title"),
+            onClick: () => setIsMsiDialogOpen(true),
+          },
+          {
             icon: Icons.Plus,
             label: t("holdings:add_activity"),
             onClick: () => navigate("/activities/manage"),
@@ -767,6 +774,7 @@ export const HoldingsPage = () => {
       <SwipablePage views={views} defaultView="investments" />
 
       {/* Alternative Asset Quick Add Modal */}
+      <MsiConvertDialog open={isMsiDialogOpen} onOpenChange={setIsMsiDialogOpen} />
       <AlternativeAssetQuickAddModal
         open={isAlternativeAssetModalOpen}
         onOpenChange={(open) => {

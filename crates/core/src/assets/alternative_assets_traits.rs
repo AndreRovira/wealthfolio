@@ -16,8 +16,8 @@ use super::alternative_assets_model::{
     UpdateAssetDetailsResponse, UpdateValuationRequest, UpdateValuationResponse,
 };
 use super::loan::{
-    LoanAction, LoanActionResult, LoanPayment, LoanSchedulePreview, LoanSetup, LoanUpdate,
-    PaymentLink, PaymentTagUpdate, StoredLoan, StoredPayment,
+    LoanAction, LoanActionResult, LoanInstalment, LoanPayment, LoanSchedulePreview, LoanSetup,
+    LoanUpdate, PaymentLink, PaymentTagUpdate, StoredLoan, StoredPayment,
 };
 use crate::activities::Activity;
 use crate::errors::Result;
@@ -150,6 +150,14 @@ pub trait AlternativeAssetServiceTrait: Send + Sync {
 
     /// The tagged withdrawals counted as payments on a loan.
     fn get_loan_payments(&self, asset_id: &str) -> Result<Vec<LoanPayment>>;
+
+    /// The instalments of a scheduled loan due on or before `as_of`, with what
+    /// the counted payments covered; empty for manual liabilities.
+    fn get_loan_instalments(
+        &self,
+        asset_id: &str,
+        as_of: chrono::NaiveDate,
+    ) -> Result<Vec<LoanInstalment>>;
 
     /// What a loan setup works out to without saving it; `asset_id` names the
     /// loan being edited, whose stored terms the preview builds on.
