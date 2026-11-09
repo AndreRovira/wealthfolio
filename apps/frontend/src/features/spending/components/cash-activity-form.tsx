@@ -99,7 +99,9 @@ function buildFormSchema(t: TFunction) {
       "CREDIT",
     ]),
     activityDate: z.date({ error: requiredError(t("spending:cashForm.pickDate")) }),
-    amount: z.coerce.number().min(0, { message: t("spending:cashForm.amountNonNegative") }),
+    amount: z
+      .number({ error: requiredError(t("spending:cashForm.amountRequired")) })
+      .min(0, { message: t("spending:cashForm.amountNonNegative") }),
     notes: z.string().optional(),
     // Advanced options. Currency defaults to the account's, so the common case
     // never sees these; a foreign charge on a domestic card needs both.
@@ -250,7 +252,7 @@ export function CashActivityForm({
       accountId: activity?.accountId ?? "",
       activityType: (activity?.activityType as FormValues["activityType"]) ?? "WITHDRAWAL",
       activityDate: activity?.activityDate ? new Date(activity.activityDate) : new Date(),
-      amount: activity?.amount != null ? Math.abs(parseFloat(activity.amount)) : 0,
+      amount: activity?.amount != null ? Math.abs(parseFloat(activity.amount)) : undefined,
       currency: activity?.currency ?? "",
       fxRate: activity?.fxRate != null ? Number(activity.fxRate) : undefined,
       notes: activity?.notes ?? "",
@@ -267,7 +269,7 @@ export function CashActivityForm({
         accountId: activity?.accountId ?? spendingAccounts[0]?.id ?? "",
         activityType: (activity?.activityType as FormValues["activityType"]) ?? "WITHDRAWAL",
         activityDate: activity?.activityDate ? new Date(activity.activityDate) : new Date(),
-        amount: activity?.amount != null ? Math.abs(parseFloat(activity.amount)) : 0,
+        amount: activity?.amount != null ? Math.abs(parseFloat(activity.amount)) : undefined,
         // Seeded from the activity, not the account: recomputing it on save is
         // what would silently turn a 9.59 USD charge into 9.59 CAD.
         currency: activity?.currency ?? "",
@@ -715,7 +717,7 @@ export function CashActivityForm({
                           <FormControl>
                             <MoneyInput
                               value={field.value}
-                              onValueChange={(v: number | undefined) => field.onChange(v ?? 0)}
+                              onValueChange={(v: number | undefined) => field.onChange(v)}
                             />
                           </FormControl>
                           <FormMessage />

@@ -896,6 +896,7 @@
   "cashForm": {
     "accountRequired": "Selecciona una cuenta.",
     "pickDate": "Elige una fecha",
+    "amountRequired": "Escribe un importe.",
     "amountNonNegative": "El importe no puede ser negativo.",
     "descDeposit": "Dinero recibido en esta cuenta",
     "descWithdrawal": "Dinero gastado o pagado desde esta cuenta",

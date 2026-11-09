@@ -7,9 +7,11 @@ import {
   DateValue,
   Dialog,
   Group,
+  I18nProvider,
   Popover,
   DatePicker as RacDatePicker,
   DatePickerProps as RacDatePickerProps,
+  useLocale,
 } from "react-aria-components";
 
 import { Calendar } from "./calendar-rac";
@@ -97,6 +99,10 @@ export function DatePickerInput({
 }: DatePickerInputProps) {
   const { t } = useTranslation();
   const scopeProps = usePortalScopeProps();
+  // Fork: English UI types dates day-first and 24h. en-MX still renders
+  // month-first in Chrome, so pin en-GB whatever the region is.
+  const { locale } = useLocale();
+  const fieldLocale = locale.startsWith("en") ? "en-GB" : locale;
   const actualGranularity = React.useMemo(() => {
     if (enableTime) {
       return timeGranularity || "minute";
@@ -114,58 +120,60 @@ export function DatePickerInput({
   );
 
   return (
-    <RacDatePicker
-      value={racValue}
-      onChange={handleRacChange}
-      isDisabled={disabled}
-      granularity={actualGranularity}
-      aria-label={t("ui:datePicker.dateLabel", "Date")}
-      className={cn(`*:not-first:mt-2`, className)}
-      {...props}
-    >
-      <Group
-        className={cn(
-          "dark:bg-input/30 border-input bg-input-bg h-input-height flex w-full flex-nowrap items-center whitespace-nowrap rounded-md border px-3 py-1 text-sm",
-          "has-[input:focus-visible]:outline-solid has-[input:focus-visible]:outline-ring has-[input:focus-visible]:outline-2 has-[input:focus-visible]:outline-offset-2",
-          disabled && "cursor-not-allowed opacity-50",
-        )}
-        data-testid={testId}
+    <I18nProvider locale={fieldLocale}>
+      <RacDatePicker
+        value={racValue}
+        onChange={handleRacChange}
+        isDisabled={disabled}
+        granularity={actualGranularity}
+        aria-label={t("ui:datePicker.dateLabel", "Date")}
+        className={cn(`*:not-first:mt-2`, className)}
+        {...props}
       >
-        <DateInput
-          unstyled
-          className="flex-1 border-none bg-transparent ring-0 outline-none focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0"
-        />
-        <Button
+        <Group
           className={cn(
-            "text-muted-foreground/80 hover:text-foreground focus-visible:outline-solid focus-visible:outline-ring focus-visible:outline-2 focus-visible:outline-offset-2",
-            "flex h-6 w-6 items-center justify-center rounded-sm transition-[color]",
-            disabled && "pointer-events-none",
+            "dark:bg-input/30 border-input bg-input-bg h-input-height flex w-full flex-nowrap items-center whitespace-nowrap rounded-md border px-3 py-1 text-sm",
+            "has-[input:focus-visible]:outline-solid has-[input:focus-visible]:outline-ring has-[input:focus-visible]:outline-2 has-[input:focus-visible]:outline-offset-2",
+            disabled && "cursor-not-allowed opacity-50",
           )}
-          aria-label={t("ui:datePicker.pick", "Pick a date")}
+          data-testid={testId}
         >
-          <Icons.CalendarIcon size={16} />
-        </Button>
-      </Group>
-      <Popover
-        {...scopeProps}
-        className="bg-background text-popover-foreground data-entering:animate-in data-exiting:animate-out data-entering:fade-in-0 data-exiting:fade-out-0 data-entering:zoom-in-95 data-exiting:zoom-out-95 data-[placement=bottom]:slide-in-from-top-2 data-[placement=left]:slide-in-from-right-2 data-[placement=right]:slide-in-from-left-2 data-[placement=top]:slide-in-from-bottom-2 z-50 rounded-lg border shadow-lg outline-hidden"
-        offset={4}
-        onOpenChange={(isOpen: boolean) => {
-          if (!isOpen && onInteractionEnd) {
-            onInteractionEnd();
-          }
-        }}
-      >
-        {/* `data-open` marks it as an open popup, as Base UI's are (React Aria
-            renders it only while open), so Back closes it first. */}
-        <Dialog
-          data-open=""
-          className="max-h-[inherit] overflow-auto p-2 outline-none"
-          style={{ pointerEvents: "auto" }}
+          <DateInput
+            unstyled
+            className="flex-1 border-none bg-transparent ring-0 outline-none focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+          />
+          <Button
+            className={cn(
+              "text-muted-foreground/80 hover:text-foreground focus-visible:outline-solid focus-visible:outline-ring focus-visible:outline-2 focus-visible:outline-offset-2",
+              "flex h-6 w-6 items-center justify-center rounded-sm transition-[color]",
+              disabled && "pointer-events-none",
+            )}
+            aria-label={t("ui:datePicker.pick", "Pick a date")}
+          >
+            <Icons.CalendarIcon size={16} />
+          </Button>
+        </Group>
+        <Popover
+          {...scopeProps}
+          className="bg-background text-popover-foreground data-entering:animate-in data-exiting:animate-out data-entering:fade-in-0 data-exiting:fade-out-0 data-entering:zoom-in-95 data-exiting:zoom-out-95 data-[placement=bottom]:slide-in-from-top-2 data-[placement=left]:slide-in-from-right-2 data-[placement=right]:slide-in-from-left-2 data-[placement=top]:slide-in-from-bottom-2 z-50 rounded-lg border shadow-lg outline-hidden"
+          offset={4}
+          onOpenChange={(isOpen: boolean) => {
+            if (!isOpen && onInteractionEnd) {
+              onInteractionEnd();
+            }
+          }}
         >
-          <Calendar />
-        </Dialog>
-      </Popover>
-    </RacDatePicker>
+          {/* `data-open` marks it as an open popup, as Base UI's are (React Aria
+              renders it only while open), so Back closes it first. */}
+          <Dialog
+            data-open=""
+            className="max-h-[inherit] overflow-auto p-2 outline-none"
+            style={{ pointerEvents: "auto" }}
+          >
+            <Calendar />
+          </Dialog>
+        </Popover>
+      </RacDatePicker>
+    </I18nProvider>
   );
 }

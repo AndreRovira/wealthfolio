@@ -853,6 +853,7 @@
   "cashForm": {
     "accountRequired": "請選取一個帳戶。",
     "pickDate": "選取日期",
+    "amountRequired": "請輸入金額。",
     "amountNonNegative": "金額不能為負數。",
     "descDeposit": "存入此帳戶的資金",
     "descWithdrawal": "從此帳戶花費或支付的資金",

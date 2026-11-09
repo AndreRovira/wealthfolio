@@ -1,5 +1,5 @@
 import { getCategoryLabel } from "@/lib/taxonomy-labels";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -156,9 +156,23 @@ export function QuickCategorizePopover({
     handleOpenChange(false);
   };
 
+  // Typing on the closed trigger opens the list with that text as the search,
+  // so Tab + letters + arrows + Enter picks a category without the mouse.
+  const openFromKey = (e: KeyboardEvent) => {
+    if (open || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setOpen(true);
+    } else if (e.key.length === 1 && e.key !== " ") {
+      e.preventDefault();
+      setSearch(e.key);
+      setOpen(true);
+    }
+  };
+
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
-      <PopoverTrigger render={trigger} />
+      <PopoverTrigger render={trigger} onKeyDown={openFromKey} />
       <PopoverContent className="w-70 p-0" align={align}>
         <Command shouldFilter={false}>
           <CommandInput
