@@ -67,6 +67,10 @@ export function useEnvelopeMutations() {
       mutationFn: (id: string) => api.deleteBill(id),
       ...opts("delete bill"),
     }),
+    markBillPaid: useMutation({
+      mutationFn: (id: string) => api.markBillPaid(id),
+      ...opts("mark bill paid"),
+    }),
     addEntry: useMutation({
       mutationFn: (i: EntryInput) => api.addEntry(i),
       ...opts("save entry"),

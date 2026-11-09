@@ -41,6 +41,18 @@ pub struct EnvelopeService {
 /// (envelope_id, bill_id) — the pot an amount lands in.
 type PotKey = (String, Option<String>);
 
+/// Spend per pot, spend per envelope this month, income deposits, latest
+/// payment date per bill pot.
+type Flows = (
+    HashMap<PotKey, Decimal>,
+    HashMap<String, Decimal>,
+    Vec<(String, NaiveDate, String, Decimal)>,
+    HashMap<PotKey, NaiveDate>,
+);
+
+/// A payment this many days before the due date still settles that due date.
+const PAYMENT_WINDOW_DAYS: i64 = 10;
+
 impl EnvelopeService {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -241,6 +253,40 @@ impl EnvelopeService {
         self.repo.insert_entries(entries).await
     }
 
+    /// Register a payment made outside the linked categories: the bill moves
+    /// to its next cycle. Nothing is posted to any account.
+    pub async fn mark_bill_paid(
+        &self,
+        bill_id: &str,
+        input: MarkPaidInput,
+        timezone: &str,
+    ) -> Result<EnvelopeBill> {
+        let mut bill = self
+            .repo
+            .list_bills()
+            .await?
+            .into_iter()
+            .find(|b| b.id == bill_id)
+            .ok_or_else(|| anyhow!("bill {bill_id} not found"))?;
+        let paid = input
+            .date
+            .unwrap_or_else(|| activity_date_in_user_timezone(Utc::now(), timezone));
+        let next = bill
+            .next_due
+            .ok_or_else(|| anyhow!("bill has no next due date"))?;
+        let advanced = advance_due(next, cycle_months(&bill.cycle), paid);
+        let advanced = if advanced == next {
+            add_months(next, cycle_months(&bill.cycle))
+        } else {
+            advanced
+        };
+        self.repo
+            .set_bill_next_due(&bill.id, Some(advanced))
+            .await?;
+        bill.next_due = Some(advanced);
+        Ok(bill)
+    }
+
     /// Pin an activity to a pot, or remove the pin so its category decides.
     pub async fn set_activity_envelope(
         &self,
@@ -353,7 +399,7 @@ impl EnvelopeService {
             .map(|e| (e.id.as_str(), e.start_date))
             .collect();
 
-        let (spent, spent_month, income_by_activity) = self
+        let (spent, spent_month, income_by_activity, last_paid) = self
             .collect_flows(
                 &envelopes,
                 as_of,
@@ -366,6 +412,23 @@ impl EnvelopeService {
             )
             .await?;
 
+        // A registered payment settles the due date it falls near and moves
+        // the bill to its next cycle; persisted so the state survives reloads.
+        let mut bills = bills;
+        for bill in bills.iter_mut() {
+            let key = (bill.envelope_id.clone(), Some(bill.id.clone()));
+            let (Some(paid), Some(next)) = (last_paid.get(&key), bill.next_due) else {
+                continue;
+            };
+            let advanced = advance_due(next, cycle_months(&bill.cycle), *paid);
+            if advanced != next {
+                self.repo
+                    .set_bill_next_due(&bill.id, Some(advanced))
+                    .await?;
+                bill.next_due = Some(advanced);
+            }
+        }
+
         let mut rows = Vec::with_capacity(envelopes.len());
         let mut total = Decimal::ZERO;
         for envelope in envelopes.iter().filter(|e| !e.archived) {
@@ -377,16 +440,29 @@ impl EnvelopeService {
                     let key = (envelope.id.clone(), Some(bill.id.clone()));
                     let f = funded.get(&key).copied().unwrap_or_default();
                     let s = spent.get(&key).copied().unwrap_or_default();
+                    let balance = f - s;
+                    let ready = bill.expected_amount > 0.0
+                        && balance >= dec(bill.expected_amount) - Decimal::new(1, 2);
+                    let days_left = bill.next_due.map(|d| (d - as_of).num_days());
+                    let state = match days_left {
+                        Some(d) if d < 0 && ready => BillState::Overdue,
+                        Some(d) if d < 0 => BillState::Underfunded,
+                        _ if ready => BillState::Ready,
+                        _ => BillState::Funding,
+                    };
                     BillBalance {
                         linked_category_ids: links
                             .iter()
                             .filter(|l| l.bill_id.as_deref() == Some(&bill.id))
                             .map(|l| l.category_id.clone())
                             .collect(),
+                        last_payment: last_paid.get(&key).copied(),
+                        state,
+                        days_left,
                         bill,
                         funded: f64_of(f),
                         spent: f64_of(s),
-                        balance: f64_of(f - s),
+                        balance: f64_of(balance),
                     }
                 })
                 .collect::<Vec<_>>();
@@ -582,20 +658,17 @@ impl EnvelopeService {
         spending_meta: &HashMap<String, Category>,
         link_by_category: &HashMap<&str, &EnvelopeCategoryLink>,
         start_by_envelope: &HashMap<&str, NaiveDate>,
-    ) -> Result<(
-        HashMap<PotKey, Decimal>,
-        HashMap<String, Decimal>,
-        Vec<(String, NaiveDate, String, Decimal)>,
-    )> {
+    ) -> Result<Flows> {
         let mut spent: HashMap<PotKey, Decimal> = HashMap::new();
+        let mut last_paid: HashMap<PotKey, NaiveDate> = HashMap::new();
         let mut spent_month: HashMap<String, Decimal> = HashMap::new();
         let mut income = Vec::new();
         let settings = self.spending_settings.get().await?;
         let Some(earliest) = envelopes.iter().map(|e| e.start_date).min() else {
-            return Ok((spent, spent_month, income));
+            return Ok((spent, spent_month, income, last_paid));
         };
         if !settings.enabled || settings.account_ids.is_empty() {
-            return Ok((spent, spent_month, income));
+            return Ok((spent, spent_month, income, last_paid));
         }
         let accounts = self
             .account_repo
@@ -607,7 +680,7 @@ impl EnvelopeService {
             .map(|a| (a.id, a.account_type))
             .collect();
         if account_types.is_empty() {
-            return Ok((spent, spent_month, income));
+            return Ok((spent, spent_month, income, last_paid));
         }
         let account_ids = account_types.keys().cloned().collect::<Vec<_>>();
         // One day of slack on both ends; the local date decides membership.
@@ -683,6 +756,13 @@ impl EnvelopeService {
                 }
                 let converted = crate::fx::convert(fx, native, &activity.currency, currency, as_of)
                     .unwrap_or(Decimal::ZERO);
+                if converted > Decimal::ZERO && bill_id.is_some() {
+                    let key = (envelope_id.clone(), bill_id.clone());
+                    let latest = last_paid.entry(key).or_insert(local_date);
+                    if local_date > *latest {
+                        *latest = local_date;
+                    }
+                }
                 *spent.entry((envelope_id.clone(), bill_id)).or_default() += converted;
                 if local_date >= month_start {
                     *spent_month.entry(envelope_id).or_default() += converted;
@@ -713,7 +793,7 @@ impl EnvelopeService {
                 }
             }
         }
-        Ok((spent, spent_month, income))
+        Ok((spent, spent_month, income, last_paid))
     }
 
     fn taxonomy_categories(&self, taxonomy_id: &str) -> Result<Vec<Category>> {
@@ -723,6 +803,36 @@ impl EnvelopeService {
             .map(|t| t.categories)
             .unwrap_or_default())
     }
+}
+
+/// Cycle length in months from the stored label.
+pub fn cycle_months(cycle: &str) -> u32 {
+    match cycle.trim() {
+        "monthly" => 1,
+        "yearly" => 12,
+        other => other
+            .split_whitespace()
+            .next()
+            .and_then(|n| n.parse::<u32>().ok())
+            .filter(|n| *n > 0)
+            .unwrap_or(1),
+    }
+}
+
+/// Same day `months` later, clamped to the end of shorter months.
+pub fn add_months(date: NaiveDate, months: u32) -> NaiveDate {
+    let total = date.year() * 12 + date.month0() as i32 + months as i32;
+    let (y, m) = (total.div_euclid(12), total.rem_euclid(12) as u32 + 1);
+    clamp_day(y, m, date.day())
+}
+
+/// Move `next_due` forward one cycle at a time while a payment on `paid`
+/// settles it (on or up to PAYMENT_WINDOW_DAYS before the due date).
+pub fn advance_due(mut next_due: NaiveDate, months: u32, paid: NaiveDate) -> NaiveDate {
+    while paid + Duration::days(PAYMENT_WINDOW_DAYS) >= next_due {
+        next_due = add_months(next_due, months);
+    }
+    next_due
 }
 
 /// The pot an activity was pinned to, if any.
@@ -932,6 +1042,32 @@ mod tests {
                 "2027-01-15"
             ]
         );
+    }
+
+    #[test]
+    fn payments_advance_the_due_date_one_cycle_at_a_time() {
+        let d = |s: &str| NaiveDate::parse_from_str(s, "%Y-%m-%d").unwrap();
+        assert_eq!(
+            advance_due(d("2026-11-09"), 1, d("2026-11-05")),
+            d("2026-12-09")
+        );
+        assert_eq!(
+            advance_due(d("2026-11-09"), 1, d("2026-10-20")),
+            d("2026-11-09")
+        );
+        assert_eq!(
+            advance_due(d("2026-11-09"), 1, d("2027-01-15")),
+            d("2027-02-09")
+        );
+        assert_eq!(
+            advance_due(d("2026-08-17"), 12, d("2026-08-17")),
+            d("2027-08-17")
+        );
+        assert_eq!(add_months(d("2026-01-31"), 1), d("2026-02-28"));
+        assert_eq!(cycle_months("monthly"), 1);
+        assert_eq!(cycle_months("yearly"), 12);
+        assert_eq!(cycle_months("6 months"), 6);
+        assert_eq!(cycle_months("weird"), 1);
     }
 
     #[test]

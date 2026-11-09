@@ -54,7 +54,6 @@ import {
   useEnvelopeMutations,
   useEnvelopeSnapshot,
 } from "../hooks/use-envelopes";
-import { billDueState } from "../lib/envelope-status";
 import { useSpendingSettings } from "../hooks/use-spending-settings";
 import { SPENDING_THEME, tint } from "../lib/theme";
 import type {
@@ -276,9 +275,7 @@ function EnvelopeCard({
   const monthIn = row.fundedThisMonth;
   const monthOut = row.spentThisMonth;
   const monthPct = monthIn > 0 ? Math.min(1, monthOut / monthIn) : monthOut > 0 ? 1 : 0;
-  const readyCount = row.bills.filter(
-    (b) => billDueState(b.bill.dueDay, b.balance, b.bill.expectedAmount, snapshot.asOf).ready,
-  ).length;
+  const readyCount = row.bills.filter((b) => b.state === "ready" || b.state === "overdue").length;
 
   return (
     <section className={cn(CARD, "overflow-hidden")}>
@@ -385,12 +382,8 @@ function EnvelopeCard({
       {open && row.bills.length > 0 && (
         <div className="border-border/60 divide-border/40 divide-y border-t">
           {row.bills.map((b) => {
-            const due = billDueState(
-              b.bill.dueDay,
-              b.balance,
-              b.bill.expectedAmount,
-              snapshot.asOf,
-            );
+            const ready = b.state === "ready" || b.state === "overdue";
+            const past = b.state === "overdue" || b.state === "underfunded";
             const pct =
               b.bill.expectedAmount > 0
                 ? Math.max(0, Math.min(1, b.balance / b.bill.expectedAmount))
@@ -403,7 +396,7 @@ function EnvelopeCard({
               key={b.bill.id}
               className={cn(
                 "hover:bg-muted/15 flex items-center gap-2 px-3 py-1.5 text-xs sm:gap-3 sm:px-4",
-                due.ready && "bg-success/5",
+                ready && "bg-success/5",
               )}
             >
               <span
@@ -418,25 +411,27 @@ function EnvelopeCard({
               </span>
               <span className="text-foreground min-w-0 flex-1 truncate">
                 {b.bill.name}
-                {due.daysLeft !== null && (
+                {b.daysLeft !== null && (
                   <span
                     className={cn(
                       "ms-1.5 rounded px-1 py-px text-2xs",
-                      due.overdue
+                      b.state === "overdue"
                         ? "bg-destructive/15 text-destructive"
-                        : due.daysLeft <= 7
+                        : b.state === "underfunded" || b.daysLeft <= 7
                           ? "bg-warning-subtle text-warning-subtle-foreground"
                           : "bg-muted text-muted-foreground",
                     )}
                   >
-                    {due.overdue
+                    {b.state === "overdue"
                       ? t("spending:envelopes.overdue")
-                      : (due.daysLeft) === 0
-                        ? t("spending:envelopes.dueToday")
-                        : t("spending:envelopes.dueIn", { count: due.daysLeft })}
+                      : b.state === "underfunded"
+                        ? t("spending:envelopes.underfunded")
+                        : b.daysLeft === 0
+                          ? t("spending:envelopes.dueToday")
+                          : t("spending:envelopes.dueIn", { count: b.daysLeft })}
                   </span>
                 )}
-                {due.ready && (
+                {b.state === "ready" && (
                   <span className="bg-success/15 text-success ms-1.5 rounded px-1 py-px text-2xs">
                     {t("spending:envelopes.ready")}
                   </span>
@@ -452,8 +447,8 @@ function EnvelopeCard({
                     className="h-full rounded-full transition-all"
                     style={{
                       width: `${pct * 100}%`,
-                      backgroundColor: due.ready ? "var(--success)" : accent,
-                      boxShadow: due.ready ? "0 0 6px var(--success)" : undefined,
+                      backgroundColor: past && b.state === "overdue" ? "var(--destructive)" : ready ? "var(--success)" : accent,
+                      boxShadow: ready && !past ? "0 0 6px var(--success)" : undefined,
                     }}
                   />
                 </TooltipTrigger>
@@ -470,7 +465,7 @@ function EnvelopeCard({
                   "w-24 shrink-0 text-end font-medium tabular-nums",
                   b.balance < 0
                     ? "text-destructive"
-                    : due.ready
+                    : b.state === "ready"
                       ? "text-success"
                       : "text-foreground",
                 )}
@@ -497,6 +492,14 @@ function EnvelopeCard({
                   >
                     <Icons.Plus className="me-2 h-3.5 w-3.5" />
                     {t("spending:envelopes.fundOrAdjust")}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="text-xs"
+                    disabled={!b.bill.nextDue}
+                    onClick={() => m.markBillPaid.mutate(b.bill.id)}
+                  >
+                    <Icons.Check className="me-2 h-3.5 w-3.5" />
+                    {t("spending:envelopes.markPaid")}
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     className="text-xs"
@@ -703,7 +706,7 @@ function BillDialog({
   const m = useEnvelopeMutations();
   const [name, setName] = useState(bill?.name ?? "");
   const [amount, setAmount] = useState(bill ? String(bill.expectedAmount) : "");
-  const [dueDay, setDueDay] = useState(bill?.dueDay != null ? String(bill.dueDay) : "");
+  const [nextDue, setNextDue] = useState(bill?.nextDue ?? "");
   const [cycle, setCycle] = useState(bill?.cycle ?? "monthly");
   const [opening, setOpening] = useState("");
   const [key, setKey] = useState(bill?.id ?? "new");
@@ -711,7 +714,7 @@ function BillDialog({
     setKey(bill?.id ?? "new");
     setName(bill?.name ?? "");
     setAmount(bill ? String(bill.expectedAmount) : "");
-    setDueDay(bill?.dueDay != null ? String(bill.dueDay) : "");
+    setNextDue(bill?.nextDue ?? "");
     setCycle(bill?.cycle ?? "monthly");
     setOpening("");
   }
@@ -721,8 +724,9 @@ function BillDialog({
       envelopeId,
       name,
       expectedAmount: num(amount),
-      dueDay: dueDay ? Number(dueDay) : null,
+      dueDay: nextDue ? Number(nextDue.slice(8, 10)) : null,
       cycle,
+      nextDue: nextDue || null,
     };
     if (bill) {
       await m.updateBill.mutateAsync({ id: bill.id, input });
@@ -763,14 +767,8 @@ function BillDialog({
                 onChange={(ev) => setAmount(ev.target.value)}
               />
             </Field>
-            <Field label={t("spending:envelopes.dueDayLabel")}>
-              <Input
-                type="number"
-                min={1}
-                max={31}
-                value={dueDay}
-                onChange={(ev) => setDueDay(ev.target.value)}
-              />
+            <Field label={t("spending:envelopes.nextDue")}>
+              <Input type="date" value={nextDue} onChange={(ev) => setNextDue(ev.target.value)} />
             </Field>
             <Field label={t("spending:envelopes.cycle")}>
               <ResponsiveSelect
@@ -778,7 +776,11 @@ function BillDialog({
                 onValueChange={setCycle}
                 options={[
                   { value: "monthly", label: t("spending:envelopes.monthly") },
+                  { value: "2 months", label: t("spending:envelopes.everyMonths", { count: 2 }) },
+                  { value: "3 months", label: t("spending:envelopes.everyMonths", { count: 3 }) },
+                  { value: "6 months", label: t("spending:envelopes.everyMonths", { count: 6 }) },
                   { value: "yearly", label: t("spending:envelopes.yearly") },
+                  { value: "24 months", label: t("spending:envelopes.everyMonths", { count: 24 }) },
                 ]}
               />
             </Field>

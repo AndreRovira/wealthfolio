@@ -8,7 +8,6 @@ import { cn } from "@/lib/utils";
 
 import { useEnvelopeSnapshot } from "../hooks/use-envelopes";
 import { SPENDING_THEME, tint } from "../lib/theme";
-import { billDueState, type BillDue } from "../lib/envelope-status";
 
 /** Last calendar day of a YYYY-MM key, as YYYY-MM-DD. */
 function monthEnd(monthKey: string) {
@@ -48,19 +47,18 @@ export function EnvelopesDashboardCard({
 
   const currency = data.currency;
   const maxAbs = Math.max(1, ...data.envelopes.map((e) => Math.abs(e.balance)));
-  const dueSoon: (BillDue & { envelopeName: string; name: string; balance: number; cost: number })[] =
-    data.envelopes
-      .flatMap((e) =>
-        e.bills.map((b) => ({
-          ...billDueState(b.bill.dueDay, b.balance, b.bill.expectedAmount, data.asOf),
-          envelopeName: e.envelope.name,
-          name: b.bill.name,
-          balance: b.balance,
-          cost: b.bill.expectedAmount,
-        })),
-      )
-      .filter((b) => b.daysLeft !== null && b.daysLeft <= 14)
-      .sort((a, b) => (a.daysLeft ?? 0) - (b.daysLeft ?? 0));
+  const dueSoon = data.envelopes
+    .flatMap((e) =>
+      e.bills.map((b) => ({
+        key: `${e.envelope.id}:${b.bill.id}`,
+        name: b.bill.name,
+        balance: b.balance,
+        state: b.state,
+        daysLeft: b.daysLeft,
+      })),
+    )
+    .filter((b) => b.state === "overdue" || b.state === "underfunded" || (b.daysLeft !== null && b.daysLeft <= 14))
+    .sort((a, b) => (a.daysLeft ?? 0) - (b.daysLeft ?? 0));
 
   return (
     <DashboardCard title={t("spending:envelopes.heading")} action={manage} padded={false}>
@@ -114,23 +112,31 @@ export function EnvelopesDashboardCard({
             </div>
             <div className="space-y-1">
               {dueSoon.slice(0, 6).map((b) => (
-                <div key={`${b.envelopeName}:${b.name}`} className="flex items-center gap-2 text-xs">
+                <div key={b.key} className="flex items-center gap-2 text-xs">
                   <span
                     className="h-1.5 w-1.5 shrink-0 rounded-full"
                     style={{
-                      backgroundColor: b.ready ? "var(--success)" : b.overdue ? "var(--destructive)" : "var(--warning)",
-                      boxShadow: b.ready ? `0 0 6px ${tint("var(--success)", 0.8)}` : undefined,
+                      backgroundColor:
+                        b.state === "ready"
+                          ? "var(--success)"
+                          : b.state === "overdue"
+                            ? "var(--destructive)"
+                            : "var(--warning)",
+                      boxShadow:
+                        b.state === "ready" ? `0 0 6px ${tint("var(--success)", 0.8)}` : undefined,
                     }}
                   />
                   <span className="text-foreground min-w-0 flex-1 truncate">{b.name}</span>
                   <span className="text-muted-foreground shrink-0">
-                    {b.overdue
+                    {b.state === "overdue"
                       ? t("spending:envelopes.overdue")
-                      : (b.daysLeft ?? 0) === 0
-                        ? t("spending:envelopes.dueToday")
-                        : t("spending:envelopes.dueIn", { count: b.daysLeft ?? 0 })}
+                      : b.state === "underfunded"
+                        ? t("spending:envelopes.underfunded")
+                        : (b.daysLeft ?? 0) === 0
+                          ? t("spending:envelopes.dueToday")
+                          : t("spending:envelopes.dueIn", { count: b.daysLeft ?? 0 })}
                   </span>
-                  <span className={cn("w-20 shrink-0 text-end tabular-nums", b.ready ? "text-success" : "text-foreground")}>
+                  <span className={cn("w-20 shrink-0 text-end tabular-nums", b.state === "ready" ? "text-success" : "text-foreground")}>
                     <PrivacyAmount value={b.balance} currency={currency} />
                   </span>
                 </div>

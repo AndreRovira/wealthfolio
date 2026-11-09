@@ -1177,7 +1177,11 @@
     "noPot": "無信封",
     "pinned": "已固定",
     "autoByCategory": "依類別",
-    "pinFailed": "無法設定信封。"
+    "pinFailed": "無法設定信封。",
+    "nextDue": "下次到期",
+    "underfunded": "資金不足",
+    "markPaid": "標記為已付",
+    "everyMonths": "每 {{count}} 個月"
   },
   "savingsPlan": {
     "title": "儲蓄計畫",

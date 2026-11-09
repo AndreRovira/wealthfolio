@@ -767,6 +767,7 @@ diesel::table! {
         archived -> Integer,
         created_at -> Text,
         updated_at -> Text,
+        next_due -> Nullable<Text>,
     }
 }
 

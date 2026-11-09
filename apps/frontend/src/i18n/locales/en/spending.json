@@ -1177,7 +1177,11 @@
     "noPot": "No envelope",
     "pinned": "pinned",
     "autoByCategory": "By category",
-    "pinFailed": "Failed to set the envelope."
+    "pinFailed": "Failed to set the envelope.",
+    "nextDue": "Next due",
+    "underfunded": "underfunded",
+    "markPaid": "Mark as paid",
+    "everyMonths": "Every {{count}} months"
   },
   "savingsPlan": {
     "title": "Savings plan",

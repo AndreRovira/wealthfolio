@@ -36,10 +36,12 @@ pub struct EnvelopeBill {
     /// Expected amount per cycle, in the base currency.
     pub expected_amount: f64,
     pub due_day: Option<i32>,
-    /// "monthly" or "yearly"; informational.
+    /// "monthly", "yearly" or "N months".
     pub cycle: String,
     pub sort_order: i32,
     pub archived: bool,
+    /// Next date the bill must be paid; a registered payment moves it one cycle.
+    pub next_due: Option<NaiveDate>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -52,6 +54,8 @@ pub struct EnvelopeBillInput {
     pub cycle: Option<String>,
     pub sort_order: Option<i32>,
     pub archived: Option<bool>,
+    #[serde(default)]
+    pub next_due: Option<NaiveDate>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -223,6 +227,20 @@ pub struct FundingRuleInput {
 
 // ----------------------------- snapshot -----------------------------
 
+/// Where a bill stands against its next due date.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BillState {
+    /// Pot below cost, due date ahead.
+    Funding,
+    /// Pot covers cost, due date ahead.
+    Ready,
+    /// Due date passed, pot covers cost, payment not registered yet.
+    Overdue,
+    /// Due date passed and the pot does not cover the cost.
+    Underfunded,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BillBalance {
@@ -231,6 +249,18 @@ pub struct BillBalance {
     pub spent: f64,
     pub balance: f64,
     pub linked_category_ids: Vec<String>,
+    pub state: BillState,
+    /// Days from as_of to next_due; negative when past; None without a date.
+    pub days_left: Option<i64>,
+    /// Latest spend that hit this bill's pot.
+    pub last_payment: Option<NaiveDate>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MarkPaidInput {
+    /// Payment date; defaults to today.
+    pub date: Option<NaiveDate>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

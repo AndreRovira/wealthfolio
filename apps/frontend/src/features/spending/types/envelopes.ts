@@ -31,6 +31,8 @@ export interface EnvelopeBill {
   cycle: string;
   sortOrder: number;
   archived: boolean;
+  /** YYYY-MM-DD; a registered payment moves it one cycle. */
+  nextDue: string | null;
 }
 
 export interface EnvelopeBillInput {
@@ -41,6 +43,7 @@ export interface EnvelopeBillInput {
   cycle?: string;
   sortOrder?: number;
   archived?: boolean;
+  nextDue?: string | null;
 }
 
 export interface EnvelopeCategoryLink {
@@ -114,12 +117,18 @@ export interface FundingRuleInput {
   active?: boolean;
 }
 
+export type BillState = "funding" | "ready" | "overdue" | "underfunded";
+
 export interface BillBalance {
   bill: EnvelopeBill;
   funded: number;
   spent: number;
   balance: number;
   linkedCategoryIds: string[];
+  state: BillState;
+  /** Days to next due; negative when past; null without a date. */
+  daysLeft: number | null;
+  lastPayment: string | null;
 }
 
 export interface EnvelopeBalance {

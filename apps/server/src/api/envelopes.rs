@@ -190,6 +190,20 @@ async fn savings(
     ))
 }
 
+async fn mark_bill_paid(
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
+    Path(id): Path<String>,
+    Json(input): Json<MarkPaidInput>,
+) -> ApiResult<Json<EnvelopeBill>> {
+    let timezone = state.timezone()?;
+    Ok(Json(
+        state
+            .envelope_service
+            .mark_bill_paid(&id, input, &timezone)
+            .await?,
+    ))
+}
+
 async fn set_activity_envelope(
     axum::Extension(state): axum::Extension<Arc<AppState>>,
     Path(id): Path<String>,
@@ -227,6 +241,7 @@ pub fn router<S: Clone + Send + Sync + 'static>() -> Router<S> {
             "/spending/envelopes/bills/{id}",
             axum::routing::put(update_bill).delete(delete_bill),
         )
+        .route("/spending/envelopes/bills/{id}/paid", post(mark_bill_paid))
         .route(
             "/spending/envelopes/entries",
             get(list_entries).post(add_entry),

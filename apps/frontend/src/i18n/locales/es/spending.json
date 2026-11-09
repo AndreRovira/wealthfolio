@@ -1240,7 +1240,11 @@
     "noPot": "Sin sobre",
     "pinned": "fijado",
     "autoByCategory": "Según categoría",
-    "pinFailed": "No se pudo fijar el sobre."
+    "pinFailed": "No se pudo fijar el sobre.",
+    "nextDue": "Próximo pago",
+    "underfunded": "falta fondo",
+    "markPaid": "Marcar pagado",
+    "everyMonths": "Cada {{count}} meses"
   },
   "savingsPlan": {
     "title": "Plan de ahorro",

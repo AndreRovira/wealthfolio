@@ -82,6 +82,7 @@ struct BillDB {
     archived: i32,
     created_at: String,
     updated_at: String,
+    next_due: Option<String>,
 }
 impl From<BillDB> for EnvelopeBill {
     fn from(r: BillDB) -> Self {
@@ -94,6 +95,7 @@ impl From<BillDB> for EnvelopeBill {
             cycle: r.cycle,
             sort_order: r.sort_order,
             archived: r.archived != 0,
+            next_due: r.next_due.as_deref().map(date),
         }
     }
 }
@@ -301,6 +303,7 @@ impl EnvelopeRepositoryTrait for EnvelopeRepository {
             archived: input.archived.unwrap_or(false) as i32,
             created_at: ts.clone(),
             updated_at: ts,
+            next_due: input.next_due.map(|d| d.to_string()),
         };
         let out = row.clone();
         self.writer
@@ -339,9 +342,13 @@ impl EnvelopeRepositoryTrait for EnvelopeRepository {
                 if let Some(v) = input.archived {
                     row.archived = v as i32;
                 }
+                if let Some(v) = input.next_due {
+                    row.next_due = Some(v.to_string());
+                }
                 row.updated_at = now();
                 diesel::update(envelope_bills::table.find(&id))
                     .set((
+                        envelope_bills::next_due.eq(&row.next_due),
                         envelope_bills::envelope_id.eq(&row.envelope_id),
                         envelope_bills::name.eq(&row.name),
                         envelope_bills::expected_amount.eq(&row.expected_amount),
@@ -354,6 +361,24 @@ impl EnvelopeRepositoryTrait for EnvelopeRepository {
                     .execute(conn)
                     .map_err(StorageError::from)?;
                 Ok(EnvelopeBill::from(row))
+            })
+            .await
+            .map_err(err)
+    }
+
+    async fn set_bill_next_due(&self, id: &str, next_due: Option<NaiveDate>) -> Result<()> {
+        let id = id.to_string();
+        let value = next_due.map(|d| d.to_string());
+        self.writer
+            .exec(move |conn| {
+                diesel::update(envelope_bills::table.find(&id))
+                    .set((
+                        envelope_bills::next_due.eq(&value),
+                        envelope_bills::updated_at.eq(now()),
+                    ))
+                    .execute(conn)
+                    .map_err(StorageError::from)?;
+                Ok(())
             })
             .await
             .map_err(err)

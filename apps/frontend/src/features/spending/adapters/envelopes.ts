@@ -74,3 +74,5 @@ export const applyIncome = (input: ApplyIncomeInput) =>
   request<EnvelopeEntry[]>("POST", "/apply-income", input);
 export const setActivityEnvelope = (activityId: string, envelope: ActivityEnvelope | null) =>
   request<void>("PUT", `/activity/${activityId}`, { envelope });
+export const markBillPaid = (id: string, date?: string) =>
+  request<EnvelopeBill>("POST", `/bills/${id}/paid`, { date: date ?? null });
