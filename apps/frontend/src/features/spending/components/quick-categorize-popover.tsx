@@ -159,13 +159,14 @@ export function QuickCategorizePopover({
   // Typing on the closed trigger opens the list with that text as the search,
   // so Tab + letters + arrows + Enter picks a category without the mouse.
   const openFromKey = (e: KeyboardEvent) => {
-    if (open || e.metaKey || e.ctrlKey || e.altKey) return;
-    if (e.key === "ArrowDown") {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.key === "ArrowDown" && !open) {
       e.preventDefault();
       setOpen(true);
     } else if (e.key.length === 1 && e.key !== " ") {
+      // Keys that land before the search box takes focus still count.
       e.preventDefault();
-      setSearch(e.key);
+      setSearch((prev) => (open ? prev + e.key : e.key));
       setOpen(true);
     }
   };
