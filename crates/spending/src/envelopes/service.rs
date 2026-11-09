@@ -41,10 +41,11 @@ pub struct EnvelopeService {
 /// (envelope_id, bill_id) — the pot an amount lands in.
 type PotKey = (String, Option<String>);
 
-/// Spend per pot, spend per envelope this month, income deposits, latest
-/// payment date per bill pot.
+/// Spend per pot, spend per envelope this month, spend per envelope this
+/// quincena, income deposits, latest payment date per bill pot.
 type Flows = (
     HashMap<PotKey, Decimal>,
+    HashMap<String, Decimal>,
     HashMap<String, Decimal>,
     Vec<(String, NaiveDate, String, Decimal)>,
     HashMap<PotKey, NaiveDate>,
@@ -52,6 +53,25 @@ type Flows = (
 
 /// A payment this many days before the due date still settles that due date.
 const PAYMENT_WINDOW_DAYS: i64 = 10;
+
+/// What the active scheduled rules put into each envelope (bill lines excluded)
+/// per quincena. Monthly rules count half; biweekly ones count as a quincena.
+pub fn period_targets(rules: &[FundingRule]) -> HashMap<String, f64> {
+    let mut out: HashMap<String, f64> = HashMap::new();
+    for rule in rules.iter().filter(|r| r.active) {
+        let factor = match rule.cadence {
+            FundingCadence::Semimonthly | FundingCadence::Biweekly => 1.0,
+            FundingCadence::Monthly => 0.5,
+            FundingCadence::OnIncome => continue,
+        };
+        for split in rule.splits.iter().filter(|s| s.bill_id.is_none()) {
+            if let Some(amount) = split.amount {
+                *out.entry(split.envelope_id.clone()).or_default() += amount * factor;
+            }
+        }
+    }
+    out
+}
 
 impl EnvelopeService {
     #[allow(clippy::too_many_arguments)]
@@ -375,6 +395,13 @@ impl EnvelopeService {
 
         let month_start = NaiveDate::from_ymd_opt(as_of.year(), as_of.month(), 1)
             .ok_or_else(|| anyhow!("bad as_of"))?;
+        // Paydays are the 15th and the last day, so a quincena runs 1-15 or 16-end.
+        let period_start = if as_of.day() <= 15 {
+            month_start
+        } else {
+            clamp_day(as_of.year(), as_of.month(), 16)
+        };
+        let period_target = period_targets(&rules);
         let mut funded: HashMap<PotKey, Decimal> = HashMap::new();
         let mut funded_month: HashMap<String, Decimal> = HashMap::new();
         for e in entries.iter().filter(|e| e.entry_date <= as_of) {
@@ -399,11 +426,12 @@ impl EnvelopeService {
             .map(|e| (e.id.as_str(), e.start_date))
             .collect();
 
-        let (spent, spent_month, income_by_activity, last_paid) = self
+        let (spent, spent_month, spent_period, income_by_activity, last_paid) = self
             .collect_flows(
                 &envelopes,
                 as_of,
                 month_start,
+                period_start,
                 currency,
                 timezone,
                 &spending_meta,
@@ -489,6 +517,10 @@ impl EnvelopeService {
                 spent_this_month: f64_of(
                     spent_month.get(&envelope.id).copied().unwrap_or_default(),
                 ),
+                spent_this_period: f64_of(
+                    spent_period.get(&envelope.id).copied().unwrap_or_default(),
+                ),
+                period_target: period_target.get(&envelope.id).copied().unwrap_or_default(),
                 linked_category_ids: links
                     .iter()
                     .filter(|l| l.envelope_id == envelope.id && l.bill_id.is_none())
@@ -653,6 +685,7 @@ impl EnvelopeService {
         envelopes: &[Envelope],
         as_of: NaiveDate,
         month_start: NaiveDate,
+        period_start: NaiveDate,
         currency: &str,
         timezone: &str,
         spending_meta: &HashMap<String, Category>,
@@ -662,13 +695,14 @@ impl EnvelopeService {
         let mut spent: HashMap<PotKey, Decimal> = HashMap::new();
         let mut last_paid: HashMap<PotKey, NaiveDate> = HashMap::new();
         let mut spent_month: HashMap<String, Decimal> = HashMap::new();
+        let mut spent_period: HashMap<String, Decimal> = HashMap::new();
         let mut income = Vec::new();
         let settings = self.spending_settings.get().await?;
         let Some(earliest) = envelopes.iter().map(|e| e.start_date).min() else {
-            return Ok((spent, spent_month, income, last_paid));
+            return Ok((spent, spent_month, spent_period, income, last_paid));
         };
         if !settings.enabled || settings.account_ids.is_empty() {
-            return Ok((spent, spent_month, income, last_paid));
+            return Ok((spent, spent_month, spent_period, income, last_paid));
         }
         let accounts = self
             .account_repo
@@ -680,7 +714,7 @@ impl EnvelopeService {
             .map(|a| (a.id, a.account_type))
             .collect();
         if account_types.is_empty() {
-            return Ok((spent, spent_month, income, last_paid));
+            return Ok((spent, spent_month, spent_period, income, last_paid));
         }
         let account_ids = account_types.keys().cloned().collect::<Vec<_>>();
         // One day of slack on both ends; the local date decides membership.
@@ -765,7 +799,10 @@ impl EnvelopeService {
                 }
                 *spent.entry((envelope_id.clone(), bill_id)).or_default() += converted;
                 if local_date >= month_start {
-                    *spent_month.entry(envelope_id).or_default() += converted;
+                    *spent_month.entry(envelope_id.clone()).or_default() += converted;
+                }
+                if local_date >= period_start {
+                    *spent_period.entry(envelope_id).or_default() += converted;
                 }
             }
             if income_native != Decimal::ZERO {
@@ -793,7 +830,7 @@ impl EnvelopeService {
                 }
             }
         }
-        Ok((spent, spent_month, income, last_paid))
+        Ok((spent, spent_month, spent_period, income, last_paid))
     }
 
     fn taxonomy_categories(&self, taxonomy_id: &str) -> Result<Vec<Category>> {
@@ -983,6 +1020,54 @@ fn f64_of(v: Decimal) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn period_targets_sum_envelope_lines_per_quincena() {
+        let split = |env: &str, bill: Option<&str>, amount: f64| FundingSplit {
+            envelope_id: env.into(),
+            bill_id: bill.map(Into::into),
+            amount: Some(amount),
+            percent: None,
+        };
+        let rule = |cadence, splits, active| FundingRule {
+            id: "r".into(),
+            name: "r".into(),
+            cadence,
+            anchor_date: None,
+            day_of_month: None,
+            income_category_id: None,
+            splits,
+            active,
+        };
+        let rules = vec![
+            rule(
+                FundingCadence::Semimonthly,
+                vec![
+                    split("disc", None, 8800.0),
+                    split("bills", Some("b1"), 350.0),
+                ],
+                true,
+            ),
+            rule(
+                FundingCadence::Monthly,
+                vec![split("disc", None, 1000.0)],
+                true,
+            ),
+            rule(
+                FundingCadence::OnIncome,
+                vec![split("disc", None, 999.0)],
+                true,
+            ),
+            rule(
+                FundingCadence::Semimonthly,
+                vec![split("disc", None, 999.0)],
+                false,
+            ),
+        ];
+        let targets = period_targets(&rules);
+        assert_eq!(targets.get("disc"), Some(&9300.0));
+        assert_eq!(targets.get("bills"), None);
+    }
 
     #[test]
     fn splits_take_fixed_first_then_percent_of_remainder() {

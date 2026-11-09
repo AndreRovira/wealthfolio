@@ -274,6 +274,10 @@ pub struct EnvelopeBalance {
     /// Entries + spend inside the current calendar month, for the period view.
     pub funded_this_month: f64,
     pub spent_this_month: f64,
+    /// Spend inside the current quincena (1-15 or 16-end of month).
+    pub spent_this_period: f64,
+    /// What scheduled rules put in per quincena at envelope level; 0 = no bar.
+    pub period_target: f64,
     pub linked_category_ids: Vec<String>,
     pub bills: Vec<BillBalance>,
 }

@@ -272,9 +272,12 @@ function EnvelopeCard({
   const negative = row.balance < 0;
   const envelopeIcon =
     row.linkedCategoryIds.map((id) => categoryMeta.get(id)?.icon).find(Boolean) ?? null;
-  const monthIn = row.fundedThisMonth;
-  const monthOut = row.spentThisMonth;
-  const monthPct = monthIn > 0 ? Math.min(1, monthOut / monthIn) : monthOut > 0 ? 1 : 0;
+  const target = row.periodTarget;
+  const periodOut = row.spentThisPeriod;
+  const periodPct = target > 0 ? Math.min(1, periodOut / target) : 0;
+  // ponytail: fixed 1.5 quincenas as the "carrying too much" line; make it a setting if it nags.
+  const range: "short" | "surplus" | null =
+    target <= 0 ? null : row.balance < 0 ? "short" : row.balance > target * 1.5 ? "surplus" : null;
   const readyCount = row.bills.filter((b) => b.state === "ready" || b.state === "overdue").length;
 
   return (
@@ -300,20 +303,41 @@ function EnvelopeCard({
         <div className="min-w-0 flex-1">
           <div className="text-foreground truncate text-sm font-semibold">{row.envelope.name}</div>
           <div className="text-muted-foreground text-2xs flex items-center gap-1.5 truncate tabular-nums">
-            <span className="bg-muted/40 hidden h-1 w-16 shrink-0 overflow-hidden rounded-full sm:block">
+            {target > 0 ? (
+              <>
+                <span className="bg-muted/40 hidden h-1 w-16 shrink-0 overflow-hidden rounded-full sm:block">
+                  <span
+                    className="block h-full rounded-full"
+                    style={{
+                      width: `${periodPct * 100}%`,
+                      backgroundColor: periodOut > target ? "var(--destructive)" : accent,
+                    }}
+                  />
+                </span>
+                {t("spending:envelopes.thisPeriod")}:{" "}
+                <PrivacyAmount value={periodOut} currency={currency} />{" "}
+                {t("spending:envelopes.of")}{" "}
+                <PrivacyAmount value={target} currency={currency} />
+              </>
+            ) : (
+              <>
+                {t("spending:envelopes.thisMonth")}:{" "}
+                <PrivacyAmount value={row.fundedThisMonth} currency={currency} />{" "}
+                {t("spending:envelopes.in")} ·{" "}
+                <PrivacyAmount value={row.spentThisMonth} currency={currency} />{" "}
+                {t("spending:envelopes.out")}
+              </>
+            )}
+            {range && (
               <span
-                className="block h-full rounded-full"
-                style={{
-                  width: `${monthPct * 100}%`,
-                  backgroundColor: monthOut > monthIn ? "var(--destructive)" : accent,
-                }}
-              />
-            </span>
-            {t("spending:envelopes.thisMonth")}:{" "}
-            <PrivacyAmount value={row.fundedThisMonth} currency={currency} />{" "}
-            {t("spending:envelopes.in")} ·{" "}
-            <PrivacyAmount value={row.spentThisMonth} currency={currency} />{" "}
-            {t("spending:envelopes.out")}
+                className={cn(
+                  "rounded px-1 py-px",
+                  range === "short" ? "bg-destructive/15 text-destructive" : "bg-warning/15 text-warning",
+                )}
+              >
+                {t(`spending:envelopes.${range}`)}
+              </span>
+            )}
             {row.linkedCategoryIds.length > 0 && (
               <> · {t("spending:envelopes.linkedCount", { count: row.linkedCategoryIds.length })}</>
             )}

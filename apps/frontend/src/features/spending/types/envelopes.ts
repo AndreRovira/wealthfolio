@@ -138,6 +138,10 @@ export interface EnvelopeBalance {
   balance: number;
   fundedThisMonth: number;
   spentThisMonth: number;
+  /** Spend inside the current quincena. */
+  spentThisPeriod: number;
+  /** Scheduled funding per quincena at envelope level; 0 means no target. */
+  periodTarget: number;
   linkedCategoryIds: string[];
   bills: BillBalance[];
 }

@@ -46,7 +46,6 @@ export function EnvelopesDashboardCard({
   }
 
   const currency = data.currency;
-  const maxAbs = Math.max(1, ...data.envelopes.map((e) => Math.abs(e.balance)));
   const dueSoon = data.envelopes
     .flatMap((e) =>
       e.bills.map((b) => ({
@@ -76,25 +75,41 @@ export function EnvelopesDashboardCard({
           {data.envelopes.map((e) => {
             const accent = e.envelope.color ?? SPENDING_THEME.deep;
             const negative = e.balance < 0;
-            const width = `${Math.min(100, (Math.abs(e.balance) / maxAbs) * 100)}%`;
+            const target = e.periodTarget;
+            // Same thresholds as the envelopes page.
+            const range =
+              target <= 0 ? null : negative ? "short" : e.balance > target * 1.5 ? "surplus" : null;
             return (
               <div key={e.envelope.id} className="text-xs">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-foreground truncate">{e.envelope.name}</span>
-                  <span className={cn("shrink-0 tabular-nums", negative ? "text-destructive" : "text-foreground")}>
-                    <PrivacyAmount value={e.balance} currency={currency} />
+                  <span className="flex shrink-0 items-center gap-1.5">
+                    {range && (
+                      <span
+                        className={cn(
+                          "rounded px-1 py-px text-2xs",
+                          range === "short" ? "bg-destructive/15 text-destructive" : "bg-warning/15 text-warning",
+                        )}
+                      >
+                        {t(`spending:envelopes.${range}`)}
+                      </span>
+                    )}
+                    <span className={cn("tabular-nums", negative ? "text-destructive" : "text-foreground")}>
+                      <PrivacyAmount value={e.balance} currency={currency} />
+                    </span>
                   </span>
                 </div>
-                <div className="bg-muted/40 mt-1 h-1.5 overflow-hidden rounded-full">
-                  <div
-                    className="h-full rounded-full"
-                    style={{
-                      width,
-                      backgroundColor: negative ? "var(--destructive)" : accent,
-                      opacity: negative ? 0.7 : 1,
-                    }}
-                  />
-                </div>
+                {target > 0 && (
+                  <div className="bg-muted/40 mt-1 h-1.5 overflow-hidden rounded-full">
+                    <div
+                      className="h-full rounded-full"
+                      style={{
+                        width: `${Math.min(100, (e.spentThisPeriod / target) * 100)}%`,
+                        backgroundColor: e.spentThisPeriod > target ? "var(--destructive)" : accent,
+                      }}
+                    />
+                  </div>
+                )}
               </div>
             );
           })}
