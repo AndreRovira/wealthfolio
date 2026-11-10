@@ -157,19 +157,20 @@ export function MobileNavBar({ navigation }: MobileNavBarProps) {
     icon: <Icons.Search2 className="size-6" />,
   };
 
-  // Portrait keeps Dashboard, Insights and Holdings one tap away, with Activities first in
-  // More. A pinned add-on takes Holdings' place, so the bar never holds more than five
-  // items. Landscape has room for one more.
-  const portraitPrimaryCount = directPinnedAddonItems.length > 0 ? 2 : 3;
+  // Fork: Activities earns the bar slot Search had; Search lives in More (and
+  // Cmd+K). Portrait shows Dashboard, Insights, Holdings and Activities; a
+  // pinned add-on takes Activities' place, so the bar never holds more than
+  // five items. Landscape has room for one more.
+  const portraitPrimaryCount = directPinnedAddonItems.length > 0 ? 3 : 4;
   const visiblePrimaryCount = isLandscape ? portraitPrimaryCount + 1 : portraitPrimaryCount;
   const visibleItems = [
     ...primaryItems.slice(0, visiblePrimaryCount),
     ...directPinnedAddonItems,
-    searchItem,
   ].filter(Boolean);
 
   const addonItems = [...overflowPinnedAddonItems, ...addonMenuItems];
   const standardMenuItems: NavLink[] = [
+    searchItem,
     ...primaryItems.slice(visiblePrimaryCount),
     ...secondaryItems,
     {
@@ -392,8 +393,8 @@ export function MobileNavBar({ navigation }: MobileNavBarProps) {
                         key={item.href}
                         to={item.href}
                         onClick={(event) => {
-                          handleNavigation(event, item.href, isActive);
                           setMobileMenuOpen(false);
+                          handleBarItemClick(event, item.href, isActive);
                         }}
                         aria-current={isActive ? "page" : undefined}
                         className={cn(
