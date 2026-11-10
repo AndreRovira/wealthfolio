@@ -103,6 +103,8 @@ export interface FundingRule {
   anchorDate: string | null;
   dayOfMonth: number | null;
   incomeCategoryId: string | null;
+  /** On-income rules: envelope that absorbs a deposit short of the fixed lines. */
+  shortfallEnvelopeId: string | null;
   splits: FundingSplit[];
   active: boolean;
 }
@@ -113,6 +115,7 @@ export interface FundingRuleInput {
   anchorDate?: string | null;
   dayOfMonth?: number | null;
   incomeCategoryId?: string | null;
+  shortfallEnvelopeId?: string | null;
   splits: FundingSplit[];
   active?: boolean;
 }

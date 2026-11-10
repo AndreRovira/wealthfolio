@@ -1186,7 +1186,17 @@
     "nextDue": "Next due",
     "underfunded": "underfunded",
     "markPaid": "Mark as paid",
-    "everyMonths": "Every {{count}} months"
+    "everyMonths": "Every {{count}} months",
+    "shortfallEnvelope": "Shortfall comes out of",
+    "plan": {
+      "title": "Paycheck plan",
+      "perDeposit": "per deposit",
+      "perPeriod": "per cycle",
+      "expected": "Expected net",
+      "surplus": "Surplus goes to",
+      "shortfall": "Shortfall from",
+      "none": "None"
+    }
   },
   "savingsPlan": {
     "title": "Savings plan",

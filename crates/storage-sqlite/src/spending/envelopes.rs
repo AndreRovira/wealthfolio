@@ -156,6 +156,7 @@ struct RuleDB {
     active: i32,
     created_at: String,
     updated_at: String,
+    shortfall_envelope_id: Option<String>,
 }
 impl From<RuleDB> for FundingRule {
     fn from(r: RuleDB) -> Self {
@@ -168,6 +169,7 @@ impl From<RuleDB> for FundingRule {
             income_category_id: r.income_category_id,
             splits: serde_json::from_str(&r.splits_json).unwrap_or_default(),
             active: r.active != 0,
+            shortfall_envelope_id: r.shortfall_envelope_id,
         }
     }
 }
@@ -557,6 +559,7 @@ impl EnvelopeRepositoryTrait for EnvelopeRepository {
             active: input.active.unwrap_or(true) as i32,
             created_at: ts.clone(),
             updated_at: ts,
+            shortfall_envelope_id: input.shortfall_envelope_id,
         };
         let out = row.clone();
         self.writer
@@ -587,6 +590,7 @@ impl EnvelopeRepositoryTrait for EnvelopeRepository {
                 row.day_of_month = input.day_of_month;
                 row.income_category_id = input.income_category_id;
                 row.splits_json = splits_json;
+                row.shortfall_envelope_id = input.shortfall_envelope_id;
                 if let Some(v) = input.active {
                     row.active = v as i32;
                 }
@@ -601,6 +605,8 @@ impl EnvelopeRepositoryTrait for EnvelopeRepository {
                         envelope_funding_rules::splits_json.eq(&row.splits_json),
                         envelope_funding_rules::active.eq(row.active),
                         envelope_funding_rules::updated_at.eq(&row.updated_at),
+                        envelope_funding_rules::shortfall_envelope_id
+                            .eq(&row.shortfall_envelope_id),
                     ))
                     .execute(conn)
                     .map_err(StorageError::from)?;

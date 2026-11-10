@@ -48,6 +48,7 @@ import type { TaxonomyCategory } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 import { CategoryIcon } from "../components/category-chips";
+import { PaycheckPlanCard } from "../components/paycheck-plan-card";
 import { SavingsPlanCard } from "../components/savings-plan-card";
 import {
   useEnvelopeEntries,
@@ -181,6 +182,7 @@ export default function SpendingEnvelopesPage() {
         {data && (
           <>
             <TotalsStrip snapshot={data} />
+            <PaycheckPlanCard snapshot={data} />
             {data.envelopes.length === 0 ? (
               <div className={cn(CARD, "text-muted-foreground p-6 text-center text-sm")}>
                 {t("spending:envelopes.empty")}
@@ -1412,6 +1414,7 @@ function RuleDialog({
   const [anchor, setAnchor] = useState(rule?.anchorDate ?? today());
   const [day, setDay] = useState(rule?.dayOfMonth != null ? String(rule.dayOfMonth) : "22");
   const [incomeCategory, setIncomeCategory] = useState(rule?.incomeCategoryId ?? "");
+  const [shortfall, setShortfall] = useState(rule?.shortfallEnvelopeId ?? "");
   const [active, setActive] = useState(rule?.active ?? true);
   const [splits, setSplits] = useState<FundingSplit[]>(rule?.splits ?? []);
   const [key, setKey] = useState(rule?.id ?? "new");
@@ -1422,6 +1425,7 @@ function RuleDialog({
     setAnchor(rule?.anchorDate ?? today());
     setDay(rule?.dayOfMonth != null ? String(rule.dayOfMonth) : "22");
     setIncomeCategory(rule?.incomeCategoryId ?? "");
+    setShortfall(rule?.shortfallEnvelopeId ?? "");
     setActive(rule?.active ?? true);
     setSplits(rule?.splits ?? []);
   }
@@ -1437,6 +1441,7 @@ function RuleDialog({
       anchorDate: anchor || null,
       dayOfMonth: cadence === "monthly" ? Number(day) : null,
       incomeCategoryId: cadence === "on_income" ? incomeCategory || null : null,
+      shortfallEnvelopeId: cadence === "on_income" ? shortfall || null : null,
       splits: splits.filter((s) => s.envelopeId),
       active,
     };
@@ -1502,6 +1507,22 @@ function RuleDialog({
                   onValueChange={setIncomeCategory}
                   options={incomeOptions}
                   placeholder={t("spending:envelopes.pickCategory")}
+                />
+              </Field>
+            )}
+            {cadence === "on_income" && (
+              <Field label={t("spending:envelopes.shortfallEnvelope")}>
+                <ResponsiveSelect
+                  value={shortfall}
+                  onValueChange={setShortfall}
+                  options={[
+                    { value: "", label: t("spending:envelopes.plan.none") },
+                    ...(snapshot?.envelopes ?? []).map((e) => ({
+                      value: e.envelope.id,
+                      label: e.envelope.name,
+                    })),
+                  ]}
+                  placeholder={t("spending:envelopes.plan.none")}
                 />
               </Field>
             )}

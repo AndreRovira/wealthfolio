@@ -809,6 +809,7 @@ diesel::table! {
         active -> Integer,
         created_at -> Text,
         updated_at -> Text,
+        shortfall_envelope_id -> Nullable<Text>,
     }
 }
 

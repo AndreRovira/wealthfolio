@@ -211,6 +211,9 @@ pub struct FundingRule {
     pub income_category_id: Option<String>,
     pub splits: Vec<FundingSplit>,
     pub active: bool,
+    /// On-income rules: when the deposit is short of the fixed lines, this
+    /// envelope absorbs the gap instead of the remainder clamping to zero.
+    pub shortfall_envelope_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -223,6 +226,8 @@ pub struct FundingRuleInput {
     pub income_category_id: Option<String>,
     pub splits: Vec<FundingSplit>,
     pub active: Option<bool>,
+    #[serde(default)]
+    pub shortfall_envelope_id: Option<String>,
 }
 
 // ----------------------------- snapshot -----------------------------

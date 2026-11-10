@@ -1249,7 +1249,17 @@
     "nextDue": "Próximo pago",
     "underfunded": "falta fondo",
     "markPaid": "Marcar pagado",
-    "everyMonths": "Cada {{count}} meses"
+    "everyMonths": "Cada {{count}} meses",
+    "shortfallEnvelope": "El faltante sale de",
+    "plan": {
+      "title": "Plan de quincena",
+      "perDeposit": "por depósito",
+      "perPeriod": "por ciclo",
+      "expected": "Neto esperado",
+      "surplus": "Excedente va a",
+      "shortfall": "Faltante sale de",
+      "none": "Ninguno"
+    }
   },
   "savingsPlan": {
     "title": "Plan de ahorro",

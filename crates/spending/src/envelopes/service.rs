@@ -562,7 +562,11 @@ impl EnvelopeService {
                     category_id: category_id.clone(),
                     rule_id: rule.id.clone(),
                     rule_name: rule.name.clone(),
-                    proposed: compute_splits(&rule.splits, *amount),
+                    proposed: compute_splits(
+                        &rule.splits,
+                        *amount,
+                        rule.shortfall_envelope_id.as_deref(),
+                    ),
                 });
             }
         }
@@ -916,24 +920,48 @@ fn is_or_descends_from(
 
 /// Fixed amounts first; percents apply to what is left after them. Rounded
 /// to cents.
-pub fn compute_splits(splits: &[FundingSplit], amount: Decimal) -> Vec<ProposedSplit> {
+/// Fixed lines first; percent lines share what is left. A deposit short of
+/// the fixed lines takes the gap out of `shortfall_envelope` when set, else
+/// the remainder clamps to zero. One row per pot: a pot named twice (fixed
+/// plus a percent of the surplus) comes back summed, since entries are
+/// unique per rule, period and pot.
+pub fn compute_splits(
+    splits: &[FundingSplit],
+    amount: Decimal,
+    shortfall_envelope: Option<&str>,
+) -> Vec<ProposedSplit> {
     let fixed: Decimal = splits.iter().filter_map(|s| s.amount).map(dec).sum();
-    let remainder = (amount - fixed).max(Decimal::ZERO);
-    splits
-        .iter()
-        .map(|s| {
-            let value = match (s.amount, s.percent) {
-                (Some(a), _) => dec(a),
-                (None, Some(p)) => (remainder * dec(p) / Decimal::from(100)).round_dp(2),
-                (None, None) => Decimal::ZERO,
-            };
-            ProposedSplit {
-                envelope_id: s.envelope_id.clone(),
-                bill_id: s.bill_id.clone(),
+    let gap = amount - fixed;
+    let remainder = gap.max(Decimal::ZERO);
+    let mut out: Vec<ProposedSplit> = Vec::new();
+    let mut add = |envelope_id: &str, bill_id: Option<&str>, value: Decimal| {
+        if let Some(row) = out
+            .iter_mut()
+            .find(|r| r.envelope_id == envelope_id && r.bill_id.as_deref() == bill_id)
+        {
+            row.amount = f64_of(dec(row.amount) + value);
+        } else {
+            out.push(ProposedSplit {
+                envelope_id: envelope_id.to_string(),
+                bill_id: bill_id.map(Into::into),
                 amount: f64_of(value),
-            }
-        })
-        .collect()
+            });
+        }
+    };
+    for s in splits {
+        let value = match (s.amount, s.percent) {
+            (Some(a), _) => dec(a),
+            (None, Some(p)) => (remainder * dec(p) / Decimal::from(100)).round_dp(2),
+            (None, None) => Decimal::ZERO,
+        };
+        add(&s.envelope_id, s.bill_id.as_deref(), value);
+    }
+    if gap < Decimal::ZERO {
+        if let Some(envelope_id) = shortfall_envelope {
+            add(envelope_id, None, gap);
+        }
+    }
+    out
 }
 
 /// Candidate dates per month from the anchor's month up to `as_of`, keeping
@@ -1038,6 +1066,7 @@ mod tests {
             income_category_id: None,
             splits,
             active,
+            shortfall_envelope_id: None,
         };
         let rules = vec![
             rule(
@@ -1097,11 +1126,45 @@ mod tests {
                 percent: None,
             },
         ];
-        let out = compute_splits(&splits, Decimal::from(10_100));
+        let out = compute_splits(&splits, Decimal::from(10_100), None);
         assert_eq!(out[0].amount, 250.0);
         assert_eq!(out[1].amount, 4875.0);
         assert_eq!(out[2].amount, 4875.0);
         assert_eq!(out[3].amount, 100.0);
+    }
+
+    #[test]
+    fn shortfall_comes_out_of_one_envelope_and_surplus_merges_by_pot() {
+        let fixed = |env: &str, amount: f64| FundingSplit {
+            envelope_id: env.into(),
+            bill_id: None,
+            amount: Some(amount),
+            percent: None,
+        };
+        let share = |env: &str, percent: f64| FundingSplit {
+            envelope_id: env.into(),
+            bill_id: None,
+            amount: None,
+            percent: Some(percent),
+        };
+        let splits = vec![
+            fixed("inv", 7000.0),
+            fixed("disc", 8000.0),
+            share("inv", 50.0),
+            share("disc", 50.0),
+        ];
+        // Surplus of 1,000 splits 50/50 on top of the fixed lines, one row per pot.
+        let up = compute_splits(&splits, Decimal::from(16_000), Some("disc"));
+        assert_eq!(up.len(), 2);
+        assert_eq!(up[0].amount, 7500.0);
+        assert_eq!(up[1].amount, 8500.0);
+        // Short by 2,000: discretionary alone absorbs it.
+        let down = compute_splits(&splits, Decimal::from(13_000), Some("disc"));
+        assert_eq!(down[0].amount, 7000.0);
+        assert_eq!(down[1].amount, 6000.0);
+        // Without a shortfall envelope the old clamp stays.
+        let clamp = compute_splits(&splits, Decimal::from(13_000), None);
+        assert_eq!(clamp[1].amount, 8000.0);
     }
 
     #[test]

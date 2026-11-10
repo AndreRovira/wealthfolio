@@ -1186,7 +1186,17 @@
     "nextDue": "下次到期",
     "underfunded": "資金不足",
     "markPaid": "標記為已付",
-    "everyMonths": "每 {{count}} 個月"
+    "everyMonths": "每 {{count}} 個月",
+    "shortfallEnvelope": "不足由此扣除",
+    "plan": {
+      "title": "薪資計畫",
+      "perDeposit": "每筆入帳",
+      "perPeriod": "每週期",
+      "expected": "預期淨額",
+      "surplus": "結餘分配至",
+      "shortfall": "不足扣自",
+      "none": "無"
+    }
   },
   "savingsPlan": {
     "title": "儲蓄計畫",

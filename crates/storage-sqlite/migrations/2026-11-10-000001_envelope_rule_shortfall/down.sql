@@ -1,0 +1,1 @@
+ALTER TABLE envelope_funding_rules DROP COLUMN shortfall_envelope_id;
