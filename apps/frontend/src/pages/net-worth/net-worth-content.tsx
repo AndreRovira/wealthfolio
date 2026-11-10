@@ -1,6 +1,5 @@
 import { useNetWorth, useNetWorthHistory } from "@/hooks/use-alternative-assets";
 import { usePortfolioAllocations } from "@/hooks/use-portfolio-allocations";
-import { useIsMobileViewport } from "@/hooks/use-platform";
 import { getNetWorthCategoryLabel } from "@/lib/net-worth-category-label";
 import { useSettingsContext } from "@/lib/settings-provider";
 import { formatDateISO, parseLocalDate } from "@/lib/utils";
@@ -68,7 +67,6 @@ export function NetWorthContent() {
   } = useNetWorth({
     date: currentDateISO,
   });
-  const isMobile = useIsMobileViewport();
 
   const period = useDashboardPeriod(currentDateISO, {
     key: INTERVAL_STORAGE_KEY,
@@ -226,7 +224,8 @@ export function NetWorthContent() {
                 currency={currency}
                 displayCurrency={true}
                 displayDecimal={false}
-                compact={isMobile}
+                // Fork: full digits on phones too, like the Investments tab.
+                compact={false}
               />
               <PrivacyToggle variant="ghost" />
               {hasStaleValuations && (
