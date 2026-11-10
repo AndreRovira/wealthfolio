@@ -54,15 +54,17 @@ type Flows = (
 /// A payment this many days before the due date still settles that due date.
 const PAYMENT_WINDOW_DAYS: i64 = 10;
 
-/// What the active scheduled rules put into each envelope (bill lines excluded)
-/// per quincena. Monthly rules count half; biweekly ones count as a quincena.
+/// What the active rules put into each envelope (bill lines excluded) per
+/// quincena. Monthly rules count half; biweekly and on-income fixed lines
+/// count as a quincena, since the paycheck rule fires twice a month.
 pub fn period_targets(rules: &[FundingRule]) -> HashMap<String, f64> {
     let mut out: HashMap<String, f64> = HashMap::new();
     for rule in rules.iter().filter(|r| r.active) {
         let factor = match rule.cadence {
-            FundingCadence::Semimonthly | FundingCadence::Biweekly => 1.0,
+            FundingCadence::Semimonthly | FundingCadence::Biweekly | FundingCadence::OnIncome => {
+                1.0
+            }
             FundingCadence::Monthly => 0.5,
-            FundingCadence::OnIncome => continue,
         };
         for split in rule.splits.iter().filter(|s| s.bill_id.is_none()) {
             if let Some(amount) = split.amount {
@@ -1084,7 +1086,7 @@ mod tests {
             ),
             rule(
                 FundingCadence::OnIncome,
-                vec![split("disc", None, 999.0)],
+                vec![split("disc", None, 700.0)],
                 true,
             ),
             rule(
@@ -1094,7 +1096,7 @@ mod tests {
             ),
         ];
         let targets = period_targets(&rules);
-        assert_eq!(targets.get("disc"), Some(&9300.0));
+        assert_eq!(targets.get("disc"), Some(&10000.0));
         assert_eq!(targets.get("bills"), None);
     }
 
