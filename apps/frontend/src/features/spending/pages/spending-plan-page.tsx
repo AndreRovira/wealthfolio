@@ -78,10 +78,10 @@ export default function SpendingPlanPage() {
       <PageContent className="space-y-4">
         <Tabs value={tab} onValueChange={(v) => setParams({ tab: String(v) })}>
           <TabsList className="flex w-full max-w-lg overflow-x-auto sm:grid sm:grid-cols-4">
-            <TabsTrigger value="income">{t("spending:plan.tabIncome")}</TabsTrigger>
-            <TabsTrigger value="paycheck">{t("spending:plan.tabPaycheck")}</TabsTrigger>
-            <TabsTrigger value="bills">{t("spending:plan.tabBills")}</TabsTrigger>
-            <TabsTrigger value="reconcile">{t("spending:plan.tabReconcile")}</TabsTrigger>
+            <TabsTrigger value="income" className="shrink-0">{t("spending:plan.tabIncome")}</TabsTrigger>
+            <TabsTrigger value="paycheck" className="shrink-0">{t("spending:plan.tabPaycheck")}</TabsTrigger>
+            <TabsTrigger value="bills" className="shrink-0">{t("spending:plan.tabBills")}</TabsTrigger>
+            <TabsTrigger value="reconcile" className="shrink-0">{t("spending:plan.tabReconcile")}</TabsTrigger>
           </TabsList>
           <TabsContent value="income" className="mt-4">
             {planQuery.data ? (
