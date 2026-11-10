@@ -572,7 +572,7 @@ function BillsTab({ snapshot }: { snapshot: EnvelopeSnapshot }) {
       <table className="w-full text-xs">
         <thead className="text-muted-foreground text-2xs uppercase tracking-wide">
           <tr>
-            <th className="px-4 py-2 text-start font-normal">{t("spending:envelopes.bills")}</th>
+            <th className="px-4 py-2 text-start font-normal">{t("spending:plan.tabBills")}</th>
             <th className="px-2 py-2 text-start font-normal">{t("spending:envelopes.cycle")}</th>
             <th className="px-2 py-2 text-end font-normal">{t("spending:plan.colQuincena")}</th>
             <th className="px-2 py-2 text-end font-normal">{t("spending:plan.colMonthly")}</th>
