@@ -216,8 +216,41 @@ async fn set_activity_envelope(
     Ok(())
 }
 
+const INCOME_PLAN_KEY: &str = "spending.income_plan";
+
+/// The income plan is a client-evaluated document: lines with amounts or
+/// formulas plus named constants. The server only stores it.
+async fn get_income_plan(
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
+) -> ApiResult<Json<serde_json::Value>> {
+    let raw = state
+        .spending_settings_service
+        .get_document(INCOME_PLAN_KEY)
+        .await?;
+    let value = match raw {
+        Some(s) => serde_json::from_str(&s).unwrap_or(serde_json::Value::Null),
+        None => serde_json::Value::Null,
+    };
+    Ok(Json(value))
+}
+
+async fn put_income_plan(
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
+    Json(value): Json<serde_json::Value>,
+) -> ApiResult<Json<serde_json::Value>> {
+    state
+        .spending_settings_service
+        .set_document(INCOME_PLAN_KEY, &value.to_string())
+        .await?;
+    Ok(Json(value))
+}
+
 pub fn router<S: Clone + Send + Sync + 'static>() -> Router<S> {
     Router::new()
+        .route(
+            "/spending/income-plan",
+            get(get_income_plan).put(put_income_plan),
+        )
         .route("/spending/savings", get(savings))
         .route("/spending/envelopes/snapshot", get(snapshot))
         .route(

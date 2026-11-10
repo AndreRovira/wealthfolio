@@ -48,7 +48,6 @@ import type { TaxonomyCategory } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 import { CategoryIcon } from "../components/category-chips";
-import { PaycheckPlanCard } from "../components/paycheck-plan-card";
 import { SavingsPlanCard } from "../components/savings-plan-card";
 import {
   useEnvelopeEntries,
@@ -142,14 +141,9 @@ export default function SpendingEnvelopesPage() {
         }}
         actions={
           <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => navigate("/spending/budget/targets")}
-              className="text-muted-foreground"
-            >
-              <Icons.Settings className="me-1.5 h-3.5 w-3.5" />
-              {t("spending:envelopes.targetsEditor")}
+            <Button variant="ghost" size="sm" onClick={() => navigate("/spending/budget")}>
+              <Icons.FileText className="me-1.5 h-3.5 w-3.5" />
+              {t("spending:plan.heading")}
             </Button>
             <Button variant="ghost" size="sm" onClick={() => setRulesOpen(true)}>
               <Icons.Refresh className="me-1.5 h-3.5 w-3.5" />
@@ -182,7 +176,6 @@ export default function SpendingEnvelopesPage() {
         {data && (
           <>
             <TotalsStrip snapshot={data} />
-            <PaycheckPlanCard snapshot={data} />
             {data.envelopes.length === 0 ? (
               <div className={cn(CARD, "text-muted-foreground p-6 text-center text-sm")}>
                 {t("spending:envelopes.empty")}

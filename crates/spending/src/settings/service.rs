@@ -25,6 +25,16 @@ impl SpendingSettingsService {
         self.read_settings().await
     }
 
+    /// Fork: free-form JSON documents (income plan) kept in the same k/v table.
+    pub async fn get_document(&self, key: &str) -> Result<Option<String>> {
+        self.repo.get_setting(key).await
+    }
+
+    pub async fn set_document(&self, key: &str, value: &str) -> Result<()> {
+        let _guard = self.op_lock.lock().await;
+        self.repo.set_setting(key, value).await
+    }
+
     async fn read_settings(&self) -> Result<SpendingSettings> {
         let enabled = self
             .repo

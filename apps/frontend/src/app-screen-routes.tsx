@@ -37,6 +37,7 @@ import TaxonomiesPage from "./pages/settings/taxonomies/taxonomies-page";
 import ConnectSettingsPage from "./pages/settings/wealthfolio-connect/connect-settings-page";
 import SpendingBudgetPage from "./features/spending/pages/spending-budget-page";
 import SpendingEnvelopesPage from "./features/spending/pages/spending-envelopes-page";
+import SpendingPlanPage from "./features/spending/pages/spending-plan-page";
 import SpendingSettingsPage from "./pages/settings/spending/spending-settings-page";
 import SpendingSettingsCategoriesPage from "./pages/settings/spending/categories/spending-categories-page";
 import SpendingSettingsEventsPage from "./pages/settings/spending/events/spending-events-page";
@@ -108,7 +109,7 @@ export const AppScreenRoutes = memo(function AppScreenRoutes({ location }: AppSc
       <Route path="goals/:goalId" element={<GoalDetailPage />} />
       <Route path="spending/insights" element={<SpendingInsightsRedirect />} />
       {/* Fork: envelopes are the budget; the upstream editor keeps its targets page. */}
-      <Route path="spending/budget" element={<SpendingEnvelopesPage />} />
+      <Route path="spending/budget" element={<SpendingPlanPage />} />
       <Route path="spending/budget/targets" element={<SpendingBudgetPage />} />
       <Route path="spending/envelopes" element={<SpendingEnvelopesPage />} />
       {/* Dynamic addon routes */}
