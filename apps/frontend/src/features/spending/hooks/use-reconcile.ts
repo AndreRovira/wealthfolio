@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { getLatestValuations } from "@/adapters";
 import { useAccounts } from "@/hooks/use-accounts";
-import { useAlternativeHoldings } from "@/hooks/use-alternative-assets";
+import { useAlternativeHoldings, useNetWorth } from "@/hooks/use-alternative-assets";
 import type { Account } from "@/lib/types";
 
 import { useEnvelopeSnapshot } from "./use-envelopes";
@@ -54,6 +54,9 @@ export function useReconcile() {
   const { accounts } = useAccounts({ filterActive: false });
   const snapshot = useEnvelopeSnapshot();
   const holdings = useAlternativeHoldings();
+  // Credit cards get no account valuation rows; net worth carries their balance
+  // as a CREDIT_CARD:<accountId> liability.
+  const netWorth = useNetWorth();
   const ids = useMemo(() => settings?.accountIds ?? [], [settings?.accountIds]);
   const valuations = useQuery({
     queryKey: ["spending_reconcile_valuations", ids],
@@ -62,8 +65,14 @@ export function useReconcile() {
   });
 
   const data = useMemo<Reconcile | null>(() => {
-    if (!snapshot.data || !valuations.data || !accounts || !holdings.data) return null;
+    if (!snapshot.data || !valuations.data || !accounts || !holdings.data || !netWorth.data) return null;
     const byAccount = new Map(valuations.data.map((v) => [v.accountId, v]));
+    const cardOwed = new Map<string, number>();
+    for (const item of netWorth.data.liabilities.breakdown) {
+      if (item.assetId?.startsWith("CREDIT_CARD:")) {
+        cardOwed.set(item.assetId.slice("CREDIT_CARD:".length), item.value);
+      }
+    }
     const tracked = accounts.filter((a) => ids.includes(a.id) && a.isActive);
     const cash: ReconcileRow[] = [];
     const cards: ReconcileRow[] = [];
@@ -72,7 +81,7 @@ export function useReconcile() {
       const balance = v ? Number(v.cashBalanceBase) : 0;
       const m = meta(account);
       if (account.accountType === "CREDIT_CARD") {
-        cards.push({ account, balance: round2(-balance), excluded: false });
+        cards.push({ account, balance: round2(cardOwed.get(account.id) ?? 0), excluded: false });
       } else {
         cash.push({
           account,
@@ -117,7 +126,11 @@ export function useReconcile() {
       cash,
       cards,
     };
-  }, [snapshot.data, valuations.data, accounts, holdings.data, ids]);
+  }, [snapshot.data, valuations.data, accounts, holdings.data, netWorth.data, ids]);
 
-  return { data, isLoading: !data && (snapshot.isLoading || valuations.isLoading || holdings.isLoading) };
+  return {
+    data,
+    isLoading:
+      !data && (snapshot.isLoading || valuations.isLoading || holdings.isLoading || netWorth.isLoading),
+  };
 }
