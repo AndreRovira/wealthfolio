@@ -54,6 +54,13 @@ type Flows = (
 /// A payment this many days before the due date still settles that due date.
 const PAYMENT_WINDOW_DAYS: i64 = 10;
 
+/// Boolean flag stored in an account's JSON `meta`.
+pub fn account_flag(meta: Option<&str>, key: &str) -> bool {
+    meta.and_then(|m| serde_json::from_str::<serde_json::Value>(m).ok())
+        .and_then(|v| v.get(key).and_then(|f| f.as_bool()))
+        .unwrap_or(false)
+}
+
 /// What the active rules put into each envelope (bill lines excluded) per
 /// quincena. Monthly rules count half; biweekly and on-income fixed lines
 /// count as a quincena, since the paycheck rule fires twice a month.
@@ -714,9 +721,13 @@ impl EnvelopeService {
             .account_repo
             .list(None, Some(false), Some(&settings.account_ids))
             .map_err(|e| anyhow!(e.to_string()))?;
+        // Accounts flagged `envelopesExcluded` in their meta (e.g. a grocery
+        // voucher card the budget already nets out) stay in reports but never
+        // touch a pot.
         let account_types: HashMap<String, String> = accounts
             .into_iter()
             .filter(|a| account_supports_purpose(&a.account_type, AccountPurpose::Spending))
+            .filter(|a| !account_flag(a.meta.as_deref(), "envelopesExcluded"))
             .map(|a| (a.id, a.account_type))
             .collect();
         if account_types.is_empty() {

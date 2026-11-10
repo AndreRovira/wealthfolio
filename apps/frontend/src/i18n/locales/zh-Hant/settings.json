@@ -939,7 +939,9 @@
       "not_tracked": "未追蹤",
       "track_aria": "追蹤 {{name}}",
       "stop_tracking_aria": "停止追蹤 {{name}}",
-      "mixed_warning": "從被追蹤的現金帳戶支付的信用卡還款應關聯為轉帳。未關聯的還款可能導致信用卡消費和現金還款都被計為支出。"
+      "mixed_warning": "從被追蹤的現金帳戶支付的信用卡還款應關聯為轉帳。未關聯的還款可能導致信用卡消費和現金還款都被計為支出。",
+      "outside_envelopes": "不計入信封，點擊以納入",
+      "inside_envelopes": "計入信封，點擊以排除"
     },
     "budget_overview": {
       "title": "預設月度計畫",

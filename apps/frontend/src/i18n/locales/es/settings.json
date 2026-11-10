@@ -970,7 +970,9 @@
       "not_tracked": "sin control",
       "track_aria": "Controlar {{name}}",
       "stop_tracking_aria": "Dejar de controlar {{name}}",
-      "mixed_warning": "Los pagos de tarjeta de crédito desde cuentas de efectivo controladas deben vincularse como transferencias. Los pagos sin vincular pueden hacer que tanto el cargo de la tarjeta como el pago en efectivo cuenten como gasto."
+      "mixed_warning": "Los pagos de tarjeta de crédito desde cuentas de efectivo controladas deben vincularse como transferencias. Los pagos sin vincular pueden hacer que tanto el cargo de la tarjeta como el pago en efectivo cuenten como gasto.",
+      "outside_envelopes": "fuera de sobres, clic para incluir",
+      "inside_envelopes": "alimenta sobres, clic para excluir"
     },
     "budget_overview": {
       "title": "Plan mensual predeterminado",

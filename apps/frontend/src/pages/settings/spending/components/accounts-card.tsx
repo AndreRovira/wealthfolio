@@ -1,5 +1,7 @@
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+
+import { updateAccount } from "@/adapters";
 
 import { useAccounts } from "@/hooks/use-accounts";
 import { useNameComparator } from "@/hooks/use-name-comparator";
@@ -29,7 +31,45 @@ export function AccountsCard() {
   const compareNames = useNameComparator();
   const { settings } = useSpendingSettings();
   const mutation = useSpendingSettingsMutation();
-  const { accounts } = useAccounts({ filterActive: false });
+  const { accounts, refetch } = useAccounts({ filterActive: false });
+  // Fork: per-account "outside envelopes" flag, kept in the account meta.
+  // Plain async: the card's tests render it without a QueryClientProvider.
+  const [flagBusy, setFlagBusy] = useState(false);
+  const toggleEnvelopes = async (account: Account, excluded: boolean) => {
+    setFlagBusy(true);
+    try {
+      let meta: Record<string, unknown> = {};
+      try {
+        meta = account.meta ? (JSON.parse(account.meta) as Record<string, unknown>) : {};
+      } catch {
+        meta = {};
+      }
+      meta.envelopesExcluded = excluded;
+      await updateAccount({
+        id: account.id,
+        name: account.name,
+        group: account.group ?? undefined,
+        accountNumber: account.accountNumber ?? undefined,
+        isDefault: account.isDefault,
+        isActive: account.isActive,
+        isArchived: account.isArchived,
+        accountType: account.accountType,
+        currency: account.currency,
+        trackingMode: account.trackingMode,
+        meta: JSON.stringify(meta),
+      });
+      await refetch();
+    } finally {
+      setFlagBusy(false);
+    }
+  };
+  const isExcluded = (account: Account) => {
+    try {
+      return account.meta ? Boolean(JSON.parse(account.meta).envelopesExcluded) : false;
+    } catch {
+      return false;
+    }
+  };
 
   const accountIds = useMemo(() => settings?.accountIds ?? [], [settings?.accountIds]);
   const initialAccountIdsRef = useRef<string[] | null>(null);
@@ -115,6 +155,21 @@ export function AccountsCard() {
                           {typeLabel} · {account.currency}
                           {account.group ? ` · ${account.group}` : ""}
                           {!tracked && ` · ${t("settings:spending.accounts.not_tracked")}`}
+                          {tracked && (
+                            <>
+                              {" · "}
+                              <button
+                                type="button"
+                                className="underline-offset-2 hover:underline"
+                                disabled={flagBusy}
+                                onClick={() => void toggleEnvelopes(account, !isExcluded(account))}
+                              >
+                                {isExcluded(account)
+                                  ? t("settings:spending.accounts.outside_envelopes")
+                                  : t("settings:spending.accounts.inside_envelopes")}
+                              </button>
+                            </>
+                          )}
                         </>
                       }
                       actions={

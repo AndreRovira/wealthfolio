@@ -898,7 +898,9 @@
       "not_tracked": "not tracked",
       "track_aria": "Track {{name}}",
       "stop_tracking_aria": "Stop tracking {{name}}",
-      "mixed_warning": "Credit card payments from tracked cash accounts should be linked as transfers. Unlinked payments can make both the card charge and cash payment count as spending."
+      "mixed_warning": "Credit card payments from tracked cash accounts should be linked as transfers. Unlinked payments can make both the card charge and cash payment count as spending.",
+      "outside_envelopes": "outside envelopes, click to include",
+      "inside_envelopes": "feeds envelopes, click to exclude"
     },
     "budget_overview": {
       "title": "Default monthly plan",

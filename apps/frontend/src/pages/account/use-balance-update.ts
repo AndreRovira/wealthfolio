@@ -1,5 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { createActivity } from "@/adapters";
+import { assignActivityCategory } from "@/features/spending/adapters/cash-activities";
 import { DECIMAL_PRECISION } from "@/lib/constants";
 import { ActivityCreate } from "@/lib/types";
 import { toast } from "@wealthfolio/ui/components/ui/use-toast";
@@ -49,7 +50,15 @@ export const useBalanceUpdate = (accountId: string) => {
         comment: "Balance updated manually",
       };
 
-      return createActivity(newActivity);
+      const created = await createActivity(newActivity);
+      // Fork: interest is income the on-income rules can route; a category
+      // is what makes them see it.
+      if (activityType === "INTEREST" && created?.id) {
+        await assignActivityCategory(created.id, "income_sources", "cat_income_interest").catch(
+          () => undefined,
+        );
+      }
+      return created;
     },
     retry: false,
     onError: () => {
