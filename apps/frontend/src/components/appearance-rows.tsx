@@ -1,9 +1,15 @@
 import { FontSelector } from "@/components/font-selector";
+import { cn } from "@/lib/utils";
 import { gainColorLabelKeys, GainColorsSelector } from "@/components/gain-colors-selector";
 import { TextSizeSelector } from "@/components/text-size-selector";
 import { resolveGainColors, type GainColors } from "@/themes/gain-colors";
 import { fontLabelKeys, type FontRole } from "@/themes/selection";
-import type { TextSize } from "@/themes/text-size";
+import {
+  deviceTextSize,
+  resolveTextSize,
+  setDeviceTextSize,
+  type TextSize,
+} from "@/themes/text-size";
 import type { ThemeDefinition } from "@/themes/themes";
 import { Button } from "@wealthfolio/ui";
 import {
@@ -13,6 +19,7 @@ import {
   ItemDescription,
   ItemTitle,
 } from "@wealthfolio/ui/components/ui/item";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 // The Font, Text size and Gain and loss colours rows of Settings → Appearance, which
@@ -83,25 +90,57 @@ export function TextSizeRow({
   onChange: (size: TextSize) => void;
 }) {
   const { t } = useTranslation();
+  // Fork: a device-only override, kept in this browser's storage.
+  const [device, setDevice] = useState<TextSize | undefined>(() => deviceTextSize());
+  const pickDevice = (size: TextSize | undefined) => {
+    setDeviceTextSize(size);
+    setDevice(size);
+    document.documentElement.dataset.textSize = resolveTextSize(size ?? value);
+  };
   // A container: the size names show when this row has room for them. The
   // description wraps: at the larger sizes two lines can't hold it in some languages.
   return (
-    <Item size="sm" className="@container px-0">
-      <ItemContent className={contentClassName}>
-        <ItemTitle>{t("settings:appearance_text_size_title")}</ItemTitle>
-        <ItemDescription className="line-clamp-none">
-          {t("settings:appearance_text_size_description")}
-        </ItemDescription>
-      </ItemContent>
-      <ItemActions className={actionsClassName}>
-        <TextSizeSelector
-          aria-label={t("settings:appearance_text_size_title")}
-          className={controlRowControlClassName}
-          value={value}
-          onChange={onChange}
-        />
-      </ItemActions>
-    </Item>
+    <>
+      <Item size="sm" className="@container px-0">
+        <ItemContent className={contentClassName}>
+          <ItemTitle>{t("settings:appearance_text_size_title")}</ItemTitle>
+          <ItemDescription className="line-clamp-none">
+            {t("settings:appearance_text_size_description")}
+          </ItemDescription>
+        </ItemContent>
+        <ItemActions className={actionsClassName}>
+          <TextSizeSelector
+            aria-label={t("settings:appearance_text_size_title")}
+            className={controlRowControlClassName}
+            value={value}
+            onChange={onChange}
+          />
+        </ItemActions>
+      </Item>
+      <Item size="sm" className="@container px-0">
+        <ItemContent className={contentClassName}>
+          <ItemTitle>{t("settings:appearance_text_size_device_title")}</ItemTitle>
+          <ItemDescription className="line-clamp-none">
+            {device
+              ? t("settings:appearance_text_size_device_description")
+              : t("settings:appearance_text_size_device_follow")}
+          </ItemDescription>
+        </ItemContent>
+        <ItemActions className={cn(actionsClassName, "flex-wrap gap-2")}>
+          <TextSizeSelector
+            aria-label={t("settings:appearance_text_size_device_title")}
+            className={controlRowControlClassName}
+            value={device ?? value}
+            onChange={pickDevice}
+          />
+          {device && (
+            <Button variant="ghost" size="sm" onClick={() => pickDevice(undefined)}>
+              {t("settings:appearance_text_size_device_reset")}
+            </Button>
+          )}
+        </ItemActions>
+      </Item>
+    </>
   );
 }
 

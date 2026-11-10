@@ -1822,5 +1822,9 @@
         "description": "Acceso a servidores HTTPS externos declarados a través del intermediario de red de la aplicación anfitriona"
       }
     }
-  }
+  },
+  "appearance_text_size_device_title": "Tamaño de texto en este dispositivo",
+  "appearance_text_size_device_description": "Reemplaza el ajuste de la cuenta solo en este navegador.",
+  "appearance_text_size_device_follow": "Sigue el ajuste de la cuenta. Elige un tamaño para cambiarlo solo aquí.",
+  "appearance_text_size_device_reset": "Seguir la cuenta"
 }

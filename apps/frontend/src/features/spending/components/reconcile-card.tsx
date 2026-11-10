@@ -45,7 +45,7 @@ export function ReconcileCard() {
           {t("spending:fxPending.count", { count: pending })}
         </Link>
       )}
-      <div className="grid grid-cols-3 gap-3 text-xs">
+      <div className="grid gap-3 text-xs sm:grid-cols-3">
         <div>
           <div className="text-muted-foreground text-2xs uppercase tracking-wide">
             {t("spending:reconcile.difference")}

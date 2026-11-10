@@ -13,6 +13,30 @@ export const DEFAULT_TEXT_SIZE: TextSize = "default";
 /** Caches the size for index.html, which applies it before the app loads. */
 export const TEXT_SIZE_STORAGE_KEY = "wealthfolio-text-size";
 
+/**
+ * Fork: a size picked for this device only. The account setting syncs across
+ * devices, which makes a size that reads well on a monitor too big on a phone.
+ */
+export const DEVICE_TEXT_SIZE_STORAGE_KEY = "wealthfolio-text-size-device";
+
+export function deviceTextSize(): TextSize | undefined {
+  try {
+    const v = localStorage.getItem(DEVICE_TEXT_SIZE_STORAGE_KEY);
+    return isTextSize(v) ? v : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function setDeviceTextSize(size: TextSize | undefined) {
+  try {
+    if (size) localStorage.setItem(DEVICE_TEXT_SIZE_STORAGE_KEY, size);
+    else localStorage.removeItem(DEVICE_TEXT_SIZE_STORAGE_KEY);
+  } catch {
+    // noop
+  }
+}
+
 export const textSizeLabelKeys = {
   small: "settings:appearance_text_size_small",
   default: "settings:appearance_text_size_default",

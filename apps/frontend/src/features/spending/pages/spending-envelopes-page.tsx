@@ -140,7 +140,7 @@ export default function SpendingEnvelopesPage() {
           else navigate("/dashboard?tab=spending");
         }}
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             <Button variant="ghost" size="sm" onClick={() => navigate("/spending/budget")}>
               <Icons.FileText className="me-1.5 h-3.5 w-3.5" />
               {t("spending:plan.heading")}

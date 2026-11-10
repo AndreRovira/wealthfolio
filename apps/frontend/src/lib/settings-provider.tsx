@@ -20,6 +20,7 @@ import {
   resolveTextSize,
   setSystemTextScale,
   TEXT_SIZE_STORAGE_KEY,
+  deviceTextSize,
 } from "@/themes/text-size";
 import { isThemeId, resolveThemeId } from "@/themes/themes";
 import { FormattingProvider, resolveFormattingLocale } from "@wealthfolio/ui";
@@ -224,7 +225,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   return (
     <SettingsContext.Provider value={contextValue}>
       <FormattingProvider
-        locale={formattingRegion}
+        // Fork: clock times read as 24h in every region; dates keep the region's order.
+        locale={withH23(resolveFormattingLocale(formattingRegion))}
         uiLocale={uiLocale}
         timezone={formattingTimezone}
         currencyFormattingRegions={settings?.currencyFormattingRegions}
@@ -295,9 +297,17 @@ async function refreshIosTextScale() {
   if (platform.os === "ios") setSystemTextScale(measureDynamicTypeScale());
 }
 
+function withH23(locale: string): string {
+  try {
+    return new Intl.Locale(locale, { hourCycle: "h23" }).toString();
+  } catch {
+    return locale;
+  }
+}
+
 // Sets <html data-text-size> and caches it for index.html's next start.
 function applyTextSize(saved: Settings["textSize"]) {
-  const textSize = resolveTextSize(saved);
+  const textSize = resolveTextSize(deviceTextSize() ?? saved);
   document.documentElement.dataset.textSize = textSize;
   try {
     localStorage.setItem(TEXT_SIZE_STORAGE_KEY, textSize);

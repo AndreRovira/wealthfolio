@@ -1771,5 +1771,9 @@
         "description": "Access to declared external HTTPS hosts through the host network broker"
       }
     }
-  }
+  },
+  "appearance_text_size_device_title": "Text size on this device",
+  "appearance_text_size_device_description": "Overrides the account setting in this browser only.",
+  "appearance_text_size_device_follow": "Follows the account setting. Pick a size to override it here only.",
+  "appearance_text_size_device_reset": "Follow account"
 }

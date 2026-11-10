@@ -18,6 +18,7 @@ import { ActionPalette } from "@/components/action-palette";
 
 import { CategoryIcon } from "./category-chips";
 import { QuickCategorizePopover } from "./quick-categorize-popover";
+import { QuickEnvelopePopover } from "./quick-envelope-popover";
 import { SelectionCheckbox } from "./selection-checkbox";
 import { QuickEventPopover } from "./quick-event-popover";
 import {
@@ -276,6 +277,23 @@ function TransactionCardImpl({
               </span>
             )}
           </div>
+          {/* Fork: the pot a spend draws from, and the provisional flag, same as the table row. */}
+          {(isOutflow && !isSaving && !isNeutral) || a.metadata?.fxPending === true ? (
+            <div className="mt-0.5 flex items-center gap-1.5">
+              <QuickEnvelopePopover
+                activityId={a.id}
+                categoryId={row.category?.id ?? null}
+                metadata={a.metadata}
+                isExpense={isOutflow && !isSaving && !isNeutral}
+                className="-mx-1 min-w-0"
+              />
+              {a.metadata?.fxPending === true && (
+                <span className="bg-warning/15 text-warning shrink-0 rounded px-1 py-px text-2xs">
+                  {t("spending:cashForm.fxPendingBadge")}
+                </span>
+              )}
+            </div>
+          ) : null}
         </div>
 
         {/* This card only renders on mobile, so the menu is always the touch

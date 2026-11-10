@@ -77,7 +77,7 @@ export default function SpendingPlanPage() {
       />
       <PageContent className="space-y-4">
         <Tabs value={tab} onValueChange={(v) => setParams({ tab: String(v) })}>
-          <TabsList className="grid w-full max-w-lg grid-cols-4">
+          <TabsList className="flex w-full max-w-lg overflow-x-auto sm:grid sm:grid-cols-4">
             <TabsTrigger value="income">{t("spending:plan.tabIncome")}</TabsTrigger>
             <TabsTrigger value="paycheck">{t("spending:plan.tabPaycheck")}</TabsTrigger>
             <TabsTrigger value="bills">{t("spending:plan.tabBills")}</TabsTrigger>
@@ -188,7 +188,27 @@ function IncomeEditor({ initial }: { initial: IncomePlanDocument }) {
                 {t("spending:plan.addLine")}
               </Button>
             </div>
-            <table className="w-full text-xs">
+            <div className="space-y-2 px-3 pb-3 sm:hidden">
+              {blockRows.map((r) => (
+                <LineCard
+                  key={r.line.id}
+                  row={r}
+                  block={block}
+                  currency={currency}
+                  gross={block === "net" ? (grossByKey.get(r.line.key) ?? null) : null}
+                  onChange={(patch) => setLine(r.line.id, patch)}
+                  onRemove={() => removeLine(r.line.id)}
+                />
+              ))}
+              <div className="flex items-center justify-between px-1 pt-1 text-xs font-semibold">
+                <span>{t("spending:plan.total")}</span>
+                <span className="tabular-nums">
+                  <PrivacyAmount value={total} currency={currency} /> ·{" "}
+                  <PrivacyAmount value={round2(total * 24)} currency={currency} />
+                </span>
+              </div>
+            </div>
+            <table className="hidden w-full text-xs sm:table">
               <thead className="text-muted-foreground text-2xs uppercase tracking-wide">
                 <tr>
                   <th className="px-4 py-2 text-start font-normal">{t("spending:plan.colName")}</th>
@@ -366,6 +386,104 @@ function LineRow({
         </button>
       </td>
     </tr>
+  );
+}
+
+/** Mobile layout of a plan line: inputs stacked, the three figures underneath. */
+function LineCard({
+  row,
+  block,
+  currency,
+  gross,
+  onChange,
+  onRemove,
+}: {
+  row: EvaluatedLine;
+  block: PlanBlock;
+  currency: string;
+  gross: number | null;
+  onChange: (patch: Partial<PlanLine>) => void;
+  onRemove: () => void;
+}) {
+  const { t } = useTranslation();
+  const { line, value, error } = row;
+  const isFormula = line.formula !== null;
+  const withheld = gross !== null && value ? round2(gross - value.monthly) : null;
+  const fig = (label: string, v: number | undefined) => (
+    <div className="min-w-0">
+      <div className="text-muted-foreground text-2xs uppercase">{label}</div>
+      <div className="truncate tabular-nums">
+        {v === undefined ? "—" : <PrivacyAmount value={v} currency={currency} />}
+      </div>
+    </div>
+  );
+  return (
+    <div className={cn("border-border/40 rounded-lg border p-2 text-xs", error && "bg-destructive/5")}>
+      <div className="flex items-center gap-2">
+        <Input
+          value={line.name}
+          placeholder={t("spending:plan.colName")}
+          className="h-8 flex-1 text-xs"
+          onChange={(e) => {
+            const name = e.target.value;
+            onChange({ name, key: line.key.startsWith("line_") || line.key === slug(line.name) ? slug(name) || line.key : line.key });
+          }}
+        />
+        <ResponsiveSelect
+          value={line.basis}
+          onValueChange={(v) => onChange({ basis: v as PlanBasis })}
+          options={BASES.map((b) => ({ value: b, label: t(`spending:plan.basis_${b}`) }))}
+          triggerClassName="h-8 w-28 text-xs"
+        />
+        <button type="button" className="text-muted-foreground hover:text-destructive" onClick={onRemove} aria-label={t("common:delete")}>
+          <Icons.Trash className="h-4 w-4" />
+        </button>
+      </div>
+      <div className="mt-1.5 flex items-center gap-1.5">
+        <button
+          type="button"
+          className="text-muted-foreground hover:text-foreground w-6 font-mono text-2xs"
+          title={t("spending:plan.toggleFormula")}
+          onClick={() =>
+            onChange(
+              isFormula ? { formula: null, amount: value?.raw ?? 0 } : { formula: String(line.amount ?? 0), amount: null },
+            )
+          }
+        >
+          {isFormula ? "fx" : "#"}
+        </button>
+        {isFormula ? (
+          <Input value={line.formula ?? ""} className="h-8 flex-1 font-mono text-xs" onChange={(e) => onChange({ formula: e.target.value })} />
+        ) : (
+          <Input
+            type="number"
+            step="0.01"
+            inputMode="decimal"
+            value={line.amount ?? ""}
+            className="h-8 flex-1 text-end text-xs tabular-nums"
+            onChange={(e) => onChange({ amount: e.target.value === "" ? null : Number(e.target.value) })}
+          />
+        )}
+        {block === "base" && (
+          <label className="text-muted-foreground flex items-center gap-1 text-2xs">
+            <Checkbox checked={line.inPaycheck} onCheckedChange={(v) => onChange({ inPaycheck: Boolean(v) })} />
+            {t("spending:plan.colPaycheck")}
+          </label>
+        )}
+      </div>
+      {error && <div className="text-destructive mt-1 text-2xs">{error}</div>}
+      <div className="mt-1.5 grid grid-cols-3 gap-2">
+        {fig(t("spending:plan.colQuincena"), value?.quincena)}
+        {fig(t("spending:plan.colMonthly"), value?.monthly)}
+        {fig(t("spending:plan.colAnnual"), value?.annual)}
+      </div>
+      {block === "net" && withheld !== null && gross ? (
+        <div className="text-muted-foreground mt-1 text-2xs">
+          {t("spending:plan.colWithheld")}: <PrivacyAmount value={withheld} currency={currency} /> ({((withheld / gross) * 100).toFixed(1)}%)
+        </div>
+      ) : null}
+      <div className="text-muted-foreground mt-1 font-mono text-2xs">{line.block}.{line.key}</div>
+    </div>
   );
 }
 
@@ -575,7 +693,48 @@ function BillsTab({ snapshot }: { snapshot: EnvelopeSnapshot }) {
             : t("spending:envelopes.dueIn", { count: b.daysLeft });
   return (
     <section className={cn(CARD, "overflow-x-auto")}>
-      <table className="w-full text-xs">
+      <div className="divide-border/40 divide-y sm:hidden">
+        {rows.map(({ b, envelope, quincena, monthly, annual }) => (
+          <div key={b.bill.id} className="px-3 py-2 text-xs">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <div className="text-foreground truncate">{b.bill.name}</div>
+                <div className="text-muted-foreground text-2xs">
+                  {envelope} · {b.bill.cycle}
+                </div>
+              </div>
+              <div className="shrink-0 text-end">
+                <div className="font-medium tabular-nums">
+                  <PrivacyAmount value={annual} currency={currency} />
+                </div>
+                <div className="text-muted-foreground text-2xs tabular-nums">
+                  <PrivacyAmount value={quincena} currency={currency} /> · <PrivacyAmount value={monthly} currency={currency} />
+                </div>
+              </div>
+            </div>
+            <div className="mt-1 flex items-center justify-between gap-2 text-2xs">
+              <span
+                className={cn(
+                  b.state === "overdue" ? "text-destructive" : b.state === "ready" ? "text-success" : "text-muted-foreground",
+                )}
+              >
+                {b.bill.nextDue ?? "—"} · {stateText(b)}
+                {b.state === "ready" && ` · ${t("spending:envelopes.ready")}`}
+              </span>
+              <span className={cn("tabular-nums", b.balance < 0 ? "text-destructive" : b.state === "ready" ? "text-success" : "")}>
+                <PrivacyAmount value={b.balance} currency={currency} />
+              </span>
+            </div>
+          </div>
+        ))}
+        <div className="flex items-center justify-between px-3 py-2 text-xs font-semibold">
+          <span>{t("spending:plan.total")}</span>
+          <span className="tabular-nums">
+            <PrivacyAmount value={total("annual")} currency={currency} />
+          </span>
+        </div>
+      </div>
+      <table className="hidden w-full text-xs sm:table">
         <thead className="text-muted-foreground text-2xs uppercase tracking-wide">
           <tr>
             <th className="px-4 py-2 text-start font-normal">{t("spending:plan.tabBills")}</th>

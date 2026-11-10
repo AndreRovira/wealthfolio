@@ -1771,5 +1771,9 @@
         "description": "透過主機網路代理存取已宣告的外部 HTTPS 主機"
       }
     }
-  }
+  },
+  "appearance_text_size_device_title": "此裝置的文字大小",
+  "appearance_text_size_device_description": "僅在此瀏覽器覆寫帳戶設定。",
+  "appearance_text_size_device_follow": "跟隨帳戶設定。選擇大小以僅在此覆寫。",
+  "appearance_text_size_device_reset": "跟隨帳戶"
 }
