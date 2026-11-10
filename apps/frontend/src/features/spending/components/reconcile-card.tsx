@@ -1,17 +1,21 @@
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 
 import { Icons, PrivacyAmount, Skeleton } from "@wealthfolio/ui";
 
 import { DashboardCard } from "@/components/dashboard-card";
 import { cn } from "@/lib/utils";
 
+import { getIncomePlan } from "../adapters/income-plan";
 import { useReconcile } from "../hooks/use-reconcile";
 
 /** Dashboard tile: is every peso accounted for, and what is free to spend. */
-export function ReconcileCard({ tolerance = 1 }: { tolerance?: number }) {
+export function ReconcileCard() {
   const { t } = useTranslation();
   const { data } = useReconcile();
+  const plan = useQuery({ queryKey: ["spending_income_plan"], queryFn: getIncomePlan });
+  const tolerance = plan.data?.reconcile?.tolerance ?? 1;
   const manage = (
     <Link
       to="/spending/budget?tab=reconcile"
