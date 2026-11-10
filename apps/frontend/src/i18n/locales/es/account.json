@@ -60,7 +60,8 @@
     "invalid_amount": "Introduce un saldo válido igual o mayor que cero.",
     "success": "Saldo actualizado",
     "error": "Error al actualizar el saldo. Inténtalo de nuevo.",
-    "record_as": "Registrar como"
+    "record_as": "Registrar como",
+    "revaluation": "Revaluación (sobre Investment)"
   },
   "investments": "Inversiones",
   "net_contribution": "Aportación neta",

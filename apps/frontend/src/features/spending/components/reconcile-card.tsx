@@ -8,6 +8,7 @@ import { DashboardCard } from "@/components/dashboard-card";
 import { cn } from "@/lib/utils";
 
 import { getIncomePlan } from "../adapters/income-plan";
+import { useFxPending } from "./fx-pending-card";
 import { useReconcile } from "../hooks/use-reconcile";
 
 /** Dashboard tile: is every peso accounted for, and what is free to spend. */
@@ -16,6 +17,7 @@ export function ReconcileCard() {
   const { data } = useReconcile();
   const plan = useQuery({ queryKey: ["spending_income_plan"], queryFn: getIncomePlan });
   const tolerance = plan.data?.reconcile?.tolerance ?? 1;
+  const pending = useFxPending().data?.length ?? 0;
   const manage = (
     <Link
       to="/spending/budget?tab=reconcile"
@@ -34,6 +36,15 @@ export function ReconcileCard() {
   const ok = Math.abs(data.difference) <= tolerance;
   return (
     <DashboardCard title={t("spending:reconcile.title")} action={manage}>
+      {pending > 0 && (
+        <Link
+          to="/spending/budget?tab=reconcile"
+          className="text-warning mb-2 flex items-center gap-1 text-xs hover:underline"
+        >
+          <Icons.AlertCircle className="h-3.5 w-3.5" />
+          {t("spending:fxPending.count", { count: pending })}
+        </Link>
+      )}
       <div className="grid grid-cols-3 gap-3 text-xs">
         <div>
           <div className="text-muted-foreground text-2xs uppercase tracking-wide">

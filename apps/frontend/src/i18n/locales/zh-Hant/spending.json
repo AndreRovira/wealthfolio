@@ -887,7 +887,9 @@
     "notesPayee": "備註／收款方",
     "notesPlaceholder": "例如：AMAZON*MARKETPLACE、STARBUCKS COFFEE",
     "updateTransaction": "更新交易",
-    "createTransaction": "建立交易"
+    "createTransaction": "建立交易",
+    "fxPending": "暫定金額：外幣，銀行稍後會重算",
+    "fxPendingBadge": "暫定"
   },
   "txTab": {
     "duplicatedComment": "已複製",
@@ -1267,5 +1269,17 @@
     "okHint": "每一分流動資金都已歸屬：應付、分期或信封。",
     "offHint": "有未歸屬的金額：某一側缺少交易，或餘額未更新。",
     "excludedHint": "刪除線的帳戶不計入流動資金：在設定 > 支出標記，或 liquidity: false。"
+  },
+  "fxPending": {
+    "title": "暫定扣款",
+    "hint": "外幣扣款，銀行數日後重算。輸入最終金額並結清。",
+    "count_other": "{{count}} 筆暫定扣款",
+    "daysAgo_other": "{{count}} 天前",
+    "finalAmount": "最終金額",
+    "settle": "結清",
+    "settled": "已結清",
+    "failed": "無法更新扣款",
+    "count_one": "{{count}} 筆暫定扣款",
+    "daysAgo_one": "{{count}} 天前"
   }
 }

@@ -6,7 +6,9 @@ import { ActivityCreate } from "@/lib/types";
 import { toast } from "@wealthfolio/ui/components/ui/use-toast";
 import { useTranslation } from "react-i18next";
 
-export type BalanceUpdateKind = "DEPOSIT" | "WITHDRAWAL" | "INTEREST" | "FEE";
+/** REVALUATION books a FEE tagged Investment > Revaluation, so a frozen-in-MXN
+ *  foreign account that drops takes the loss out of the Investment envelope. */
+export type BalanceUpdateKind = "DEPOSIT" | "WITHDRAWAL" | "INTEREST" | "FEE" | "REVALUATION";
 
 export interface BalanceUpdateInput {
   currency: string;
@@ -43,7 +45,10 @@ export const useBalanceUpdate = (accountId: string) => {
       // Don't set assetId - backend generates CASH:{currency} for cash activities.
       const newActivity: ActivityCreate = {
         accountId,
-        activityType: activityType ?? (difference > 0 ? "DEPOSIT" : "WITHDRAWAL"),
+        activityType:
+          activityType === "REVALUATION"
+            ? "FEE"
+            : (activityType ?? (difference > 0 ? "DEPOSIT" : "WITHDRAWAL")),
         activityDate: new Date().toISOString(),
         currency,
         amount,
@@ -57,6 +62,13 @@ export const useBalanceUpdate = (accountId: string) => {
         await assignActivityCategory(created.id, "income_sources", "cat_income_interest").catch(
           () => undefined,
         );
+      }
+      if (activityType === "REVALUATION" && created?.id) {
+        await assignActivityCategory(
+          created.id,
+          "spending_categories",
+          "cat_investment_revaluation",
+        ).catch(() => undefined);
       }
       return created;
     },

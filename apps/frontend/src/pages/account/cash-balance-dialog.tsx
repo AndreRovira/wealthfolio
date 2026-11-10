@@ -106,6 +106,7 @@ export function CashBalanceDialog({
       : [
           { value: "WITHDRAWAL", label: t("activity:type_withdrawal") },
           { value: "FEE", label: t("activity:type_fee") },
+          { value: "REVALUATION", label: t("account:balance_edit.revaluation") },
         ];
   const busy = isPending || form.formState.isSubmitting;
   const unavailable = disabled || currentBalance == null;

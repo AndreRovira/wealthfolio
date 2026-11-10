@@ -930,7 +930,9 @@
     "notesPayee": "Notas / Beneficiario",
     "notesPlaceholder": "p. ej., AMAZON*MARKETPLACE, STARBUCKS COFFEE",
     "updateTransaction": "Actualizar transacción",
-    "createTransaction": "Crear transacción"
+    "createTransaction": "Crear transacción",
+    "fxPending": "Monto provisional: moneda extranjera, el banco lo ajustará",
+    "fxPendingBadge": "provisional"
   },
   "txTab": {
     "duplicatedComment": "Duplicada",
@@ -1330,5 +1332,19 @@
     "okHint": "Cada peso de liquidez está debido, comprometido en una mensualidad o en un sobre.",
     "offHint": "Algo no cuadra: falta una transacción de un lado o un saldo sin actualizar.",
     "excludedHint": "Las cuentas tachadas quedan fuera de liquidez: marcadas en Ajustes > Gastos o con liquidity: false."
+  },
+  "fxPending": {
+    "title": "Cargos provisionales",
+    "hint": "Cargos en moneda extranjera que el banco ajusta días después. Captura el monto final y liquida.",
+    "count_one": "{{count}} cargo provisional",
+    "count_other": "{{count}} cargos provisionales",
+    "count_many": "{{count}} cargos provisionales",
+    "daysAgo_one": "hace {{count}} día",
+    "daysAgo_other": "hace {{count}} días",
+    "daysAgo_many": "hace {{count}} días",
+    "finalAmount": "Monto final",
+    "settle": "Liquidar",
+    "settled": "Cargo liquidado",
+    "failed": "No se pudo actualizar el cargo"
   }
 }

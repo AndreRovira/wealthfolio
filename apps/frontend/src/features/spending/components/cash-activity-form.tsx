@@ -32,6 +32,7 @@ import {
   DatePickerInput,
   Form,
   FormControl,
+  Checkbox,
   FormField,
   FormItem,
   FormLabel,
@@ -103,6 +104,7 @@ function buildFormSchema(t: TFunction) {
       .number({ error: requiredError(t("spending:cashForm.amountRequired")) })
       .min(0, { message: t("spending:cashForm.amountNonNegative") }),
     notes: z.string().optional(),
+    fxPending: z.boolean().optional(),
     // Advanced options. Currency defaults to the account's, so the common case
     // never sees these; a foreign charge on a domestic card needs both.
     currency: z.string().optional(),
@@ -132,6 +134,8 @@ interface FormValues {
   currency?: string;
   fxRate?: number;
   notes?: string;
+  /** Foreign-currency charge whose MXN amount the bank will restate in a few days. */
+  fxPending?: boolean;
   category?: string;
 }
 
@@ -256,6 +260,7 @@ export function CashActivityForm({
       currency: activity?.currency ?? "",
       fxRate: activity?.fxRate != null ? Number(activity.fxRate) : undefined,
       notes: activity?.notes ?? "",
+      fxPending: activity?.metadata?.fxPending === true,
       category:
         activity?.categoryTaxonomyId && activity?.categoryId
           ? `${activity.categoryTaxonomyId}:${activity.categoryId}`
@@ -275,6 +280,7 @@ export function CashActivityForm({
         currency: activity?.currency ?? "",
         fxRate: activity?.fxRate != null ? Number(activity.fxRate) : undefined,
         notes: activity?.notes ?? "",
+        fxPending: activity?.metadata?.fxPending === true,
         category:
           activity?.categoryTaxonomyId && activity?.categoryId
             ? `${activity.categoryTaxonomyId}:${activity.categoryId}`
@@ -392,7 +398,10 @@ export function CashActivityForm({
           currency,
           fxRate,
           comment: values.notes ?? null,
-          metadata: cashActivityFlowMetadata(values.activityType, subtype, activity?.metadata),
+          metadata: {
+            ...(cashActivityFlowMetadata(values.activityType, subtype, activity?.metadata) ?? {}),
+            fxPending: values.fxPending === true,
+          },
         };
         const [reviewed] = await reviewEdits([update]);
         saved = await updateActivity(reviewed);
@@ -406,7 +415,10 @@ export function CashActivityForm({
           currency,
           fxRate,
           comment: values.notes ?? null,
-          metadata: cashActivityFlowMetadata(values.activityType, subtype),
+          metadata: {
+            ...(cashActivityFlowMetadata(values.activityType, subtype) ?? {}),
+            ...(values.fxPending ? { fxPending: true } : {}),
+          },
         };
         saved = await createActivity(create);
       }
@@ -869,6 +881,24 @@ export function CashActivityForm({
                         }
                       />
                     </FormItem>
+
+                    <FormField
+                      control={form.control}
+                      name="fxPending"
+                      render={({ field }) => (
+                        <FormItem className="flex items-center gap-2 space-y-0">
+                          <FormControl>
+                            <Checkbox
+                              checked={field.value === true}
+                              onCheckedChange={(v) => field.onChange(v === true)}
+                            />
+                          </FormControl>
+                          <FormLabel className="text-muted-foreground cursor-pointer text-xs font-normal">
+                            {t("spending:cashForm.fxPending")}
+                          </FormLabel>
+                        </FormItem>
+                      )}
+                    />
 
                     <FormField
                       control={form.control}

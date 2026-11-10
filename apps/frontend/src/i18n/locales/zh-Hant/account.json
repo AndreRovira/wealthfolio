@@ -60,7 +60,8 @@
     "invalid_amount": "請輸入大於或等於零的有效餘額。",
     "success": "餘額已更新",
     "error": "更新餘額失敗，請重試。",
-    "record_as": "記錄為"
+    "record_as": "記錄為",
+    "revaluation": "重估（Investment 信封）"
   },
   "investments": "投資",
   "net_contribution": "淨投入",

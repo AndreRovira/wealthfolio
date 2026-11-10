@@ -24,6 +24,7 @@ import {
 import { cn } from "@/lib/utils";
 
 import { getIncomePlan, saveIncomePlan, type IncomePlanDocument } from "../adapters/income-plan";
+import { FxPendingCard } from "../components/fx-pending-card";
 import { PaycheckPlanCard } from "../components/paycheck-plan-card";
 import { useEnvelopeMutations, useEnvelopeSnapshot } from "../hooks/use-envelopes";
 import { useReconcile, type Reconcile } from "../hooks/use-reconcile";
@@ -726,6 +727,9 @@ function ReconcileTab({ plan }: { plan: IncomePlanDocument }) {
         <h3 className="text-foreground mb-2 text-sm font-semibold">{t("spending:reconcile.cardDebt")}</h3>
         {rows(data.cards)}
       </section>
+      <div className="lg:col-span-2">
+        <FxPendingCard currency={data.currency} />
+      </div>
     </div>
   );
 }

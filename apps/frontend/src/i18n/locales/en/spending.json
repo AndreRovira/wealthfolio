@@ -887,7 +887,9 @@
     "notesPayee": "Notes / Payee",
     "notesPlaceholder": "e.g., AMAZON*MARKETPLACE, STARBUCKS COFFEE",
     "updateTransaction": "Update Transaction",
-    "createTransaction": "Create Transaction"
+    "createTransaction": "Create Transaction",
+    "fxPending": "Provisional amount: foreign currency, the bank will restate it",
+    "fxPendingBadge": "provisional"
   },
   "txTab": {
     "duplicatedComment": "Duplicated",
@@ -1267,5 +1269,17 @@
     "okHint": "Every peso in liquidity is either owed, committed to an instalment or sitting in an envelope.",
     "offHint": "Something is unaccounted for: a transaction missing on one side, or a balance not updated.",
     "excludedHint": "Struck-through accounts are outside liquidity: flagged in Settings > Spending or as liquidity: false."
+  },
+  "fxPending": {
+    "title": "Provisional charges",
+    "hint": "Foreign-currency charges the bank restates a few days later. Enter the final amount and settle.",
+    "count_one": "{{count}} provisional charge",
+    "count_other": "{{count}} provisional charges",
+    "daysAgo_one": "{{count}} day ago",
+    "daysAgo_other": "{{count}} days ago",
+    "finalAmount": "Final amount",
+    "settle": "Settle",
+    "settled": "Charge settled",
+    "failed": "Could not update the charge"
   }
 }

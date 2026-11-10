@@ -252,6 +252,11 @@ function TransactionRowImpl({
           isExpense={isOutflow && !isSaving && !isNeutral}
           className="-mx-1 mt-0.5 flex"
         />
+        {a.metadata?.fxPending === true && (
+          <span className="bg-warning/15 text-warning mt-0.5 inline-block rounded px-1 py-px text-2xs">
+            {t("spending:cashForm.fxPendingBadge")}
+          </span>
+        )}
       </TableCell>
       <TableCell
         className={cn(
