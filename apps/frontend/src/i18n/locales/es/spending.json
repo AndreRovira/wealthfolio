@@ -1311,6 +1311,24 @@
     "offBy": "Diferencia",
     "applyToRule": "Aplicar a la regla",
     "inSync": "La regla coincide con el plan",
-    "flagLinesHint": "Marca en la pestaña Ingresos las líneas de neto base que caen en el depósito de la quincena."
+    "flagLinesHint": "Marca en la pestaña Ingresos las líneas de neto base que caen en el depósito de la quincena.",
+    "tabReconcile": "Reconciliar"
+  },
+  "reconcile": {
+    "title": "Reconciliación",
+    "difference": "Diferencia",
+    "liquidity": "Liquidez",
+    "cardDebt": "Saldo de tarjetas",
+    "msiRemaining": "MSI restantes",
+    "envelopes": "Saldo de sobres",
+    "float": "Float",
+    "float30": "Float tras 30 días",
+    "billsDue30": "Pagos fijos en 30 días",
+    "msiDue30": "Mensualidades MSI en 30 días",
+    "taxEnvelope": "Sobre Tax",
+    "tolerance": "Avisar arriba de",
+    "okHint": "Cada peso de liquidez está debido, comprometido en una mensualidad o en un sobre.",
+    "offHint": "Algo no cuadra: falta una transacción de un lado o un saldo sin actualizar.",
+    "excludedHint": "Las cuentas tachadas quedan fuera de liquidez: marcadas en Ajustes > Gastos o con liquidity: false."
   }
 }

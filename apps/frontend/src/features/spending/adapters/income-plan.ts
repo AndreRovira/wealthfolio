@@ -6,6 +6,7 @@ import type { IncomePlan } from "../lib/plan-eval";
 /** Stored as one JSON document; the server does not interpret it. */
 export interface IncomePlanDocument extends IncomePlan {
   paycheck?: { ruleId: string | null; remainderEnvelopeId: string | null };
+  reconcile?: { tolerance: number };
 }
 
 const URL = "/api/v1/spending/income-plan";

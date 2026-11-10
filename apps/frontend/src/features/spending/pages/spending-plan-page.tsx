@@ -26,6 +26,7 @@ import { cn } from "@/lib/utils";
 import { getIncomePlan, saveIncomePlan, type IncomePlanDocument } from "../adapters/income-plan";
 import { PaycheckPlanCard } from "../components/paycheck-plan-card";
 import { useEnvelopeMutations, useEnvelopeSnapshot } from "../hooks/use-envelopes";
+import { useReconcile, type Reconcile } from "../hooks/use-reconcile";
 import {
   evaluatePlan,
   round2,
@@ -75,10 +76,11 @@ export default function SpendingPlanPage() {
       />
       <PageContent className="space-y-4">
         <Tabs value={tab} onValueChange={(v) => setParams({ tab: String(v) })}>
-          <TabsList className="grid w-full max-w-md grid-cols-3">
+          <TabsList className="grid w-full max-w-lg grid-cols-4">
             <TabsTrigger value="income">{t("spending:plan.tabIncome")}</TabsTrigger>
             <TabsTrigger value="paycheck">{t("spending:plan.tabPaycheck")}</TabsTrigger>
             <TabsTrigger value="bills">{t("spending:plan.tabBills")}</TabsTrigger>
+            <TabsTrigger value="reconcile">{t("spending:plan.tabReconcile")}</TabsTrigger>
           </TabsList>
           <TabsContent value="income" className="mt-4">
             {planQuery.data ? (
@@ -96,6 +98,9 @@ export default function SpendingPlanPage() {
           </TabsContent>
           <TabsContent value="bills" className="mt-4">
             {snapshot.data ? <BillsTab snapshot={snapshot.data} /> : <Skeleton className="h-40 w-full" />}
+          </TabsContent>
+          <TabsContent value="reconcile" className="mt-4">
+            {planQuery.data ? <ReconcileTab plan={planQuery.data} /> : <Skeleton className="h-40 w-full" />}
           </TabsContent>
         </Tabs>
       </PageContent>
@@ -627,5 +632,100 @@ function BillsTab({ snapshot }: { snapshot: EnvelopeSnapshot }) {
         </tfoot>
       </table>
     </section>
+  );
+}
+
+// ----------------------------- reconcile -----------------------------
+
+function ReconcileTab({ plan }: { plan: IncomePlanDocument }) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const { data, isLoading } = useReconcile();
+  const [tolerance, setTolerance] = useState(String(plan.reconcile?.tolerance ?? 1));
+  const saveTolerance = useMutation({
+    mutationFn: () => saveIncomePlan({ ...plan, reconcile: { tolerance: Number(tolerance) || 0 } }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: [PLAN_KEY] }),
+    onError: () => toast.error(t("spending:plan.saveFailed")),
+  });
+  if (!data) return isLoading ? <Skeleton className="h-40 w-full" /> : null;
+  const tol = Number(tolerance) || 0;
+  const ok = Math.abs(data.difference) <= tol;
+  const line = (label: string, v: number, opts?: { strong?: boolean; minus?: boolean; cls?: string }) => (
+    <div className="flex items-center justify-between text-xs">
+      <span className={opts?.strong ? "text-foreground font-medium" : "text-muted-foreground"}>{label}</span>
+      <span className={cn("tabular-nums", opts?.strong && "font-semibold", opts?.cls)}>
+        {opts?.minus ? "− " : ""}
+        <PrivacyAmount value={v} currency={data.currency} />
+      </span>
+    </div>
+  );
+  const rows = (list: Reconcile["cash"]) =>
+    list.map((r) => (
+      <div
+        key={r.account.id}
+        className={cn("flex items-center justify-between text-xs", r.excluded && "text-muted-foreground line-through")}
+      >
+        <span>{r.account.name}</span>
+        <span className="tabular-nums">
+          <PrivacyAmount value={r.balance} currency={data.currency} />
+        </span>
+      </div>
+    ));
+  return (
+    <div className="grid gap-4 lg:grid-cols-2">
+      <section className={cn(CARD, "space-y-1.5 p-4")}>
+        <h3 className="text-foreground mb-2 text-sm font-semibold">{t("spending:reconcile.title")}</h3>
+        {line(t("spending:reconcile.liquidity"), data.liquidity, { strong: true })}
+        {line(t("spending:reconcile.cardDebt"), data.cardDebt, { minus: true })}
+        {line(t("spending:reconcile.msiRemaining"), data.msiRemaining, { minus: true })}
+        {line(t("spending:reconcile.envelopes"), data.envelopes, { minus: true })}
+        <div className="border-border/40 border-t pt-1.5">
+          {line(t("spending:reconcile.difference"), data.difference, {
+            strong: true,
+            cls: ok ? "text-success" : "text-destructive",
+          })}
+        </div>
+        <p className="text-muted-foreground pt-1 text-2xs">
+          {ok ? t("spending:reconcile.okHint") : t("spending:reconcile.offHint")}
+        </p>
+        <div className="flex items-center gap-2 pt-2">
+          <span className="text-muted-foreground text-xs">{t("spending:reconcile.tolerance")}</span>
+          <Input
+            type="number"
+            step="0.01"
+            value={tolerance}
+            onChange={(e) => setTolerance(e.target.value)}
+            className="h-7 w-24 text-end text-xs"
+          />
+          <Button size="sm" variant="outline" onClick={() => saveTolerance.mutate()} disabled={saveTolerance.isPending}>
+            {t("common:save")}
+          </Button>
+        </div>
+      </section>
+      <section className={cn(CARD, "space-y-1.5 p-4")}>
+        <h3 className="text-foreground mb-2 text-sm font-semibold">{t("spending:reconcile.float")}</h3>
+        {line(t("spending:reconcile.liquidity"), data.liquidity)}
+        {line(t("spending:reconcile.taxEnvelope"), data.liquidity - data.float - data.cardDebt, { minus: true })}
+        {line(t("spending:reconcile.cardDebt"), data.cardDebt, { minus: true })}
+        {line(t("spending:reconcile.float"), data.float, { strong: true })}
+        <div className="border-border/40 border-t pt-1.5">
+          {line(t("spending:reconcile.billsDue30"), data.billsDue30, { minus: true })}
+          {line(t("spending:reconcile.msiDue30"), data.msiDue30, { minus: true })}
+          {line(t("spending:reconcile.float30"), data.float30, {
+            strong: true,
+            cls: data.float30 < 0 ? "text-destructive" : undefined,
+          })}
+        </div>
+      </section>
+      <section className={cn(CARD, "space-y-1 p-4")}>
+        <h3 className="text-foreground mb-2 text-sm font-semibold">{t("spending:reconcile.liquidity")}</h3>
+        {rows(data.cash)}
+        <p className="text-muted-foreground pt-1 text-2xs">{t("spending:reconcile.excludedHint")}</p>
+      </section>
+      <section className={cn(CARD, "space-y-1 p-4")}>
+        <h3 className="text-foreground mb-2 text-sm font-semibold">{t("spending:reconcile.cardDebt")}</h3>
+        {rows(data.cards)}
+      </section>
+    </div>
   );
 }

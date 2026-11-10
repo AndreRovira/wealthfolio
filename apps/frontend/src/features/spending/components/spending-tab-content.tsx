@@ -84,6 +84,7 @@ import {
   localDateParts,
 } from "../lib/timezone";
 import { EnvelopesDashboardCard } from "./envelopes-dashboard-card";
+import { ReconcileCard } from "./reconcile-card";
 import { CashFlowStrip } from "./cash-flow-strip";
 import { EventsCard } from "./events-card";
 import { RecentActivityCard } from "./recent-activity-card";
@@ -1145,6 +1146,9 @@ export default function SpendingTabContent() {
             </div>
 
             <div className="contents @min-[53rem]:block @min-[53rem]:space-y-6">
+              <div className="order-2 @min-[53rem]:order-none">
+                <ReconcileCard />
+              </div>
               <div className="order-2 @min-[53rem]:order-none">
                 <EnvelopesDashboardCard
                   monthKey={budgetMonthKey}

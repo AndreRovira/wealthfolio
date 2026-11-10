@@ -34,7 +34,7 @@ export interface IncomePlan {
   constants: PlanConstant[];
 }
 
-/** Quincenas per basis: the quincena is the stored unit, 2 decimals. */
+/** Quincenas per basis. */
 export const BASIS_FACTOR: Record<PlanBasis, number> = { quincena: 1, monthly: 2, annual: 24 };
 
 export const round2 = (v: number) => Math.round(v * 100) / 100;
@@ -181,9 +181,15 @@ function evaluate(src: string, lookup: (name: string) => number): number {
   return v;
 }
 
-export function toValue(raw: number, basis: PlanBasis): PlanValue {
-  const quincena = round2(raw / BASIS_FACTOR[basis]);
-  return { raw, quincena, monthly: round2(quincena * 2), annual: round2(quincena * 24) };
+/**
+ * Prorated blocks keep full precision in every column, like the spreadsheet.
+ * Net base is what actually gets paid, so its quincena rounds to 2 decimals
+ * and the other columns follow from that.
+ */
+export function toValue(raw: number, basis: PlanBasis, exact: boolean): PlanValue {
+  const q = raw / BASIS_FACTOR[basis];
+  const quincena = exact ? q : round2(q);
+  return { raw, quincena, monthly: quincena * 2, annual: quincena * 24 };
 }
 
 /** Evaluate every line; references see the referenced line in its own basis. */
@@ -212,7 +218,7 @@ export function evaluatePlan(plan: IncomePlan): EvaluatedLine[] {
               throw new Error(`unknown ${name}`);
             })
           : (line.amount ?? 0);
-      const v = toValue(raw, line.basis);
+      const v = toValue(raw, line.basis, line.block !== "base");
       values.set(ref, v);
       return v;
     } catch (e) {

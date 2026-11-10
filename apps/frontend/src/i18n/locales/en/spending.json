@@ -1248,6 +1248,24 @@
     "offBy": "Off by",
     "applyToRule": "Apply to rule",
     "inSync": "Rule matches the plan",
-    "flagLinesHint": "Flag the net base lines that land in the paycheck deposit on the Income tab."
+    "flagLinesHint": "Flag the net base lines that land in the paycheck deposit on the Income tab.",
+    "tabReconcile": "Reconcile"
+  },
+  "reconcile": {
+    "title": "Reconciliation",
+    "difference": "Difference",
+    "liquidity": "Liquidity",
+    "cardDebt": "Card balances owed",
+    "msiRemaining": "MSI remaining",
+    "envelopes": "Envelope balances",
+    "float": "Float",
+    "float30": "Float after 30 days",
+    "billsDue30": "Bills due in 30 days",
+    "msiDue30": "MSI instalments in 30 days",
+    "taxEnvelope": "Tax envelope",
+    "tolerance": "Warn above",
+    "okHint": "Every peso in liquidity is either owed, committed to an instalment or sitting in an envelope.",
+    "offHint": "Something is unaccounted for: a transaction missing on one side, or a balance not updated.",
+    "excludedHint": "Struck-through accounts are outside liquidity: flagged in Settings > Spending or as liquidity: false."
   }
 }

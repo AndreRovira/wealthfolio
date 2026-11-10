@@ -1248,6 +1248,24 @@
     "offBy": "差額",
     "applyToRule": "套用至規則",
     "inSync": "規則與計畫一致",
-    "flagLinesHint": "請在收入分頁標記會進入薪資入帳的淨額基本列。"
+    "flagLinesHint": "請在收入分頁標記會進入薪資入帳的淨額基本列。",
+    "tabReconcile": "對帳"
+  },
+  "reconcile": {
+    "title": "對帳",
+    "difference": "差額",
+    "liquidity": "流動資金",
+    "cardDebt": "信用卡應付",
+    "msiRemaining": "分期剩餘",
+    "envelopes": "信封餘額",
+    "float": "可動用",
+    "float30": "30 天後可動用",
+    "billsDue30": "30 天內到期帳單",
+    "msiDue30": "30 天內分期",
+    "taxEnvelope": "稅務信封",
+    "tolerance": "超過則警示",
+    "okHint": "每一分流動資金都已歸屬：應付、分期或信封。",
+    "offHint": "有未歸屬的金額：某一側缺少交易，或餘額未更新。",
+    "excludedHint": "刪除線的帳戶不計入流動資金：在設定 > 支出標記，或 liquidity: false。"
   }
 }
