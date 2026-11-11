@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { billLastPaid } from "./bill-cycle";
 import { evaluatePlan, resolvePlan, type IncomePlan } from "./plan-eval";
 
 const plan: IncomePlan = {
@@ -56,5 +57,27 @@ describe("evaluatePlan", () => {
     expect(resolved["paycheck.expected"]).toBe(48750);
     // A line that fails to evaluate is left out, not sent as zero.
     expect("net.bad" in resolved).toBe(false);
+  });
+});
+
+describe("billLastPaid", () => {
+  const bill = (lastPayment: string | null, nextDue: string | null, cycle: string) => ({
+    lastPayment,
+    bill: { nextDue, cycle },
+  });
+  it("prefers the recorded payment", () => {
+    expect(billLastPaid(bill("2026-11-09", "2026-12-09", "monthly"))).toEqual({
+      date: "2026-11-09",
+      recorded: true,
+    });
+  });
+  it("falls back to the start of the saving period, one cycle before the next due date", () => {
+    expect(billLastPaid(bill(null, "2026-12-09", "monthly")).date).toBe("2026-11-09");
+    expect(billLastPaid(bill(null, "2027-08-17", "yearly")).date).toBe("2026-08-17");
+    expect(billLastPaid(bill(null, "2027-03-31", "6 months"))).toEqual({
+      date: "2026-09-30",
+      recorded: false,
+    });
+    expect(billLastPaid(bill(null, null, "monthly")).date).toBeNull();
   });
 });

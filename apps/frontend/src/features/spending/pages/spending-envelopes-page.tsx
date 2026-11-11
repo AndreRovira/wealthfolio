@@ -56,7 +56,7 @@ import {
 } from "../hooks/use-envelopes";
 import { useSpendingSettings } from "../hooks/use-spending-settings";
 import { SPENDING_THEME, tint } from "../lib/theme";
-import { billShares } from "../lib/bill-cycle";
+import { billLastPaid, billShares } from "../lib/bill-cycle";
 import {
   SOURCE_BILL,
   type EnvelopeBalance,
@@ -466,6 +466,9 @@ function EnvelopeCard({
           <div className="text-muted-foreground hidden items-center gap-3 px-4 py-1 text-2xs uppercase tracking-wide sm:flex">
             <span className="w-5 shrink-0" aria-hidden />
             <span className="flex-1" />
+            <span className="hidden w-24 shrink-0 text-end lg:inline">
+              {t("spending:plan.colLastPaid")}
+            </span>
             <span className="w-20 shrink-0" aria-hidden />
             <span className="w-24 shrink-0 text-end">{t("spending:envelopes.expectedAmount")}</span>
             <span className="w-24 shrink-0 text-end">{t("spending:plan.colAnnual")}</span>
@@ -474,6 +477,7 @@ function EnvelopeCard({
           </div>
           {row.bills.map((b) => {
             const billAnnual = billShares(b.bill.expectedAmount, b.bill.cycle).annual;
+            const paid = billLastPaid(b);
             const ready = b.state === "ready" || b.state === "overdue";
             const past = b.state === "overdue" || b.state === "underfunded";
             const pct =
@@ -530,10 +534,32 @@ function EnvelopeCard({
                   </span>
                 )}
               </span>
-                <span className="text-muted-foreground block text-2xs tabular-nums sm:hidden">
-                  {t("spending:plan.colAnnual")}{" "}
-                  <PrivacyAmount value={billAnnual} currency={currency} />
+                <span className="text-muted-foreground block text-2xs tabular-nums lg:hidden">
+                  <span className="sm:hidden">
+                    {t("spending:plan.colAnnual")}{" "}
+                    <PrivacyAmount value={billAnnual} currency={currency} />
+                    {paid.date && " · "}
+                  </span>
+                  {paid.date && (
+                    <>
+                      {paid.recorded
+                        ? t("spending:plan.colLastPaid")
+                        : t("spending:envelopes.savingSince")}{" "}
+                      {paid.date}
+                    </>
+                  )}
                 </span>
+              </span>
+              <span
+                className={cn(
+                  "text-muted-foreground hidden w-24 shrink-0 text-end tabular-nums lg:inline",
+                  !paid.recorded && "italic",
+                )}
+                title={
+                  paid.date && !paid.recorded ? t("spending:envelopes.savingSinceHint") : undefined
+                }
+              >
+                {paid.date ?? "—"}
               </span>
               <Tooltip>
                 <TooltipTrigger

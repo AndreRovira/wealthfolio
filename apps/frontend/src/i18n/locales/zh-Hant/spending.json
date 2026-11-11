@@ -1189,6 +1189,8 @@
     "nextDue": "下次到期",
     "underfunded": "資金不足",
     "markPaid": "標記為已付",
+    "savingSince": "儲蓄起始日",
+    "savingSinceHint": "尚無付款紀錄：這是本期儲蓄的起始日，也就是上一筆付款的到期日。",
     "everyMonths": "每 {{count}} 個月",
     "shortfallEnvelope": "不足由此扣除",
     "lineLabel": "標籤",

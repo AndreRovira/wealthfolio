@@ -1,3 +1,5 @@
+import { format, parseISO, subMonths } from "date-fns";
+
 import { round2 } from "./plan-eval";
 
 /** Months in a bill's cycle label: "monthly", "yearly" or "N months". */
@@ -16,4 +18,19 @@ export function cycleMonths(cycle: string): number {
 export function billShares(expectedAmount: number, cycle: string) {
   const quincena = round2(expectedAmount / (cycleMonths(cycle) * 2));
   return { quincena, monthly: round2(quincena * 2), annual: round2(quincena * 24) };
+}
+
+/**
+ * When a bill was last paid. A payment that reached its pot is the recorded
+ * date; without one, the current saving period started on the due date before
+ * the next one, which is when the last payment was due.
+ */
+export function billLastPaid(bill: {
+  lastPayment: string | null;
+  bill: { nextDue: string | null; cycle: string };
+}): { date: string | null; recorded: boolean } {
+  if (bill.lastPayment) return { date: bill.lastPayment, recorded: true };
+  if (!bill.bill.nextDue) return { date: null, recorded: false };
+  const start = subMonths(parseISO(bill.bill.nextDue), cycleMonths(bill.bill.cycle));
+  return { date: format(start, "yyyy-MM-dd"), recorded: false };
 }

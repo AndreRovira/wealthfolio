@@ -1189,6 +1189,8 @@
     "nextDue": "Next due",
     "underfunded": "underfunded",
     "markPaid": "Mark as paid",
+    "savingSince": "Saving since",
+    "savingSinceHint": "No payment recorded yet: this is when the current saving period began, the due date the last payment belonged to.",
     "everyMonths": "Every {{count}} months",
     "shortfallEnvelope": "Shortfall comes out of",
     "lineLabel": "Label",

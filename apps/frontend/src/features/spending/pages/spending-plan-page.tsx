@@ -28,7 +28,7 @@ import { FxPendingCard } from "../components/fx-pending-card";
 import { PaycheckPlanCard } from "../components/paycheck-plan-card";
 import { ENVELOPES_KEY, useEnvelopeMutations, useEnvelopeSnapshot } from "../hooks/use-envelopes";
 import { useReconcile, type Reconcile } from "../hooks/use-reconcile";
-import { billShares } from "../lib/bill-cycle";
+import { billLastPaid, billShares } from "../lib/bill-cycle";
 import {
   evaluatePlan,
   expectedPaycheck,
@@ -787,7 +787,19 @@ function BillsTab({ snapshot }: { snapshot: EnvelopeSnapshot }) {
               {num(quincena)}
               {num(monthly)}
               {num(annual, "font-medium")}
-              <td className="text-muted-foreground px-2 py-1.5 tabular-nums">{b.lastPayment ?? "—"}</td>
+              <td
+                className={cn(
+                  "text-muted-foreground px-2 py-1.5 tabular-nums",
+                  !billLastPaid(b).recorded && "italic",
+                )}
+                title={
+                  billLastPaid(b).date && !billLastPaid(b).recorded
+                    ? t("spending:envelopes.savingSinceHint")
+                    : undefined
+                }
+              >
+                {billLastPaid(b).date ?? "—"}
+              </td>
               <td className="px-2 py-1.5 tabular-nums">
                 <div>{b.bill.nextDue ?? "—"}</div>
                 <div
