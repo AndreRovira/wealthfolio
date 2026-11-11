@@ -249,7 +249,7 @@ function TransactionRowImpl({
           activityId={a.id}
           categoryId={row.category?.id ?? null}
           metadata={a.metadata}
-          isExpense={isOutflow && !isSaving && !isNeutral}
+          isExpense={isOutflow && !isNeutral}
           isIncome={isIncome}
           className="-mx-1 mt-0.5 flex"
         />

@@ -26,6 +26,7 @@ import { invalidateSpendingCaches } from "../lib/invalidation";
 import type { ActivityEnvelope, EnvelopeSnapshot } from "../types/envelopes";
 
 const SPENDING_TAXONOMY = "spending_categories";
+const SAVINGS_TAXONOMY = "savings_categories";
 
 /** The pot a category feeds through the links: its own, else the nearest linked ancestor. */
 function potForCategory(
@@ -79,7 +80,7 @@ export interface QuickEnvelopePopoverProps {
   activityId: string;
   categoryId: string | null;
   metadata: Record<string, unknown> | undefined;
-  /** Spending shows the pot it draws from; saving rows render nothing. */
+  /** Spending, or a move to an investing account, shows the pot it draws from. */
   isExpense: boolean;
   /**
    * Income shows whether the deposit is split by its rule or kept out of the
@@ -103,10 +104,17 @@ export function QuickEnvelopePopover({
   const [open, setOpen] = useState(false);
   const snapshot = useEnvelopeSnapshot();
   const taxonomy = useTaxonomy(SPENDING_TAXONOMY);
+  // A move to an investing account picks its pot through a savings category.
+  const savings = useTaxonomy(SAVINGS_TAXONOMY);
   const parents = useMemo(
     () =>
-      new Map((taxonomy.data?.categories ?? []).map((c) => [c.id, c.parentId ?? null])),
-    [taxonomy.data?.categories],
+      new Map(
+        [...(taxonomy.data?.categories ?? []), ...(savings.data?.categories ?? [])].map((c) => [
+          c.id,
+          c.parentId ?? null,
+        ]),
+      ),
+    [taxonomy.data?.categories, savings.data?.categories],
   );
   const pin = readActivityEnvelope(metadata);
   const auto = potForCategory(categoryId, snapshot.data, parents);

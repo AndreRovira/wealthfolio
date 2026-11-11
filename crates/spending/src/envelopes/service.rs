@@ -17,12 +17,16 @@ use super::model::*;
 use super::traits::EnvelopeRepositoryTrait;
 use crate::activity_allocations::{allocations_for_taxonomy, group_assignments, group_splits};
 use crate::activity_assignments::ActivityTaxonomyAssignmentRepositoryTrait;
-use crate::activity_classification::{activity_abs_amount, classify_activity};
+use crate::activity_classification::{
+    activity_abs_amount, classify_activity_for_aggregation, within_spending_transfer_groups,
+    SpendingClassification,
+};
 use crate::activity_splits::ActivitySplitRepositoryTrait;
 use crate::settings::SpendingSettingsService;
 
 const SPENDING_TAXONOMY: &str = "spending_categories";
 const INCOME_TAXONOMY: &str = "income_sources";
+const SAVINGS_TAXONOMY: &str = "savings_categories";
 
 pub const ACTIVITY_ENVELOPE_KEY: &str = "envelope";
 
@@ -500,7 +504,10 @@ impl EnvelopeService {
             }
         }
 
-        let spending_categories = self.taxonomy_categories(SPENDING_TAXONOMY)?;
+        // Savings categories sit beside the spending ones: a move to an
+        // investing account picks its pot through a savings category.
+        let mut spending_categories = self.taxonomy_categories(SPENDING_TAXONOMY)?;
+        spending_categories.extend(self.taxonomy_categories(SAVINGS_TAXONOMY)?);
         let spending_meta: HashMap<String, Category> = spending_categories
             .iter()
             .map(|c| (c.id.clone(), c.clone()))
@@ -798,19 +805,24 @@ impl EnvelopeService {
             .account_repo
             .list(None, Some(false), Some(&settings.account_ids))
             .map_err(|e| anyhow!(e.to_string()))?;
+        let accounts = accounts
+            .into_iter()
+            .filter(|a| account_supports_purpose(&a.account_type, AccountPurpose::Spending))
+            .collect::<Vec<_>>();
+        // Every spending account tells whether a transfer stayed among them,
+        // excluded ones included.
+        let context_ids = accounts.iter().map(|a| a.id.clone()).collect::<Vec<_>>();
         // Accounts flagged `envelopesExcluded` in their meta (e.g. a grocery
         // voucher card the budget already nets out) stay in reports but never
         // touch a pot.
         let account_types: HashMap<String, String> = accounts
             .into_iter()
-            .filter(|a| account_supports_purpose(&a.account_type, AccountPurpose::Spending))
             .filter(|a| !account_flag(a.meta.as_deref(), "envelopesExcluded"))
             .map(|a| (a.id, a.account_type))
             .collect();
         if account_types.is_empty() {
             return Ok((spent, spent_month, spent_period, income, last_paid));
         }
-        let account_ids = account_types.keys().cloned().collect::<Vec<_>>();
         // One day of slack on both ends; the local date decides membership.
         let start_utc = Utc.from_utc_datetime(
             &(earliest - Duration::days(1))
@@ -824,8 +836,12 @@ impl EnvelopeService {
         );
         let activities = self
             .activity_repo
-            .get_activities_by_account_ids_in_date_range(&account_ids, start_utc, end_utc)
+            .get_activities_by_account_ids_in_date_range(&context_ids, start_utc, end_utc)
             .map_err(|e| anyhow!(e.to_string()))?;
+        // ponytail: both legs of a transfer are looked for inside the envelope
+        // window only; read the whole history if a transfer ever straddles its start.
+        let transfer_groups =
+            within_spending_transfer_groups(&activities.iter().collect::<Vec<_>>());
         let activity_ids = activities.iter().map(|a| a.id.clone()).collect::<Vec<_>>();
         let assignments = group_assignments(
             self.assignment_repo
@@ -843,9 +859,10 @@ impl EnvelopeService {
             if local_date > as_of {
                 continue;
             }
-            let classification = classify_activity(activity, account_type);
+            let classification =
+                classify_activity_for_aggregation(activity, account_type, &transfer_groups);
             let amount = activity_abs_amount(activity);
-            let spending_native = classification.spending_amount(amount);
+            let (spending_native, pot_taxonomy) = pot_flow(classification, amount);
             let income_native = classification.income_amount(amount);
             // A pinned activity goes whole to its pot (or to none); otherwise
             // each category allocation follows its link.
@@ -868,7 +885,7 @@ impl EnvelopeService {
                 Some(_) => Vec::new(),
                 None => allocations_for_taxonomy(
                     &activity.id,
-                    SPENDING_TAXONOMY,
+                    pot_taxonomy,
                     spending_native,
                     &assignments,
                     &splits,
@@ -973,6 +990,19 @@ pub fn advance_due(mut next_due: NaiveDate, months: u32, paid: NaiveDate) -> Nai
         next_due = add_months(next_due, months);
     }
     next_due
+}
+
+/// What an activity takes out of a pot, and the taxonomy whose category picks
+/// that pot. Money moved to an investing account leaves a pot like a spend, and
+/// money brought back returns to it; both go by their savings category.
+fn pot_flow(classification: SpendingClassification, amount: Decimal) -> (Decimal, &'static str) {
+    let saving =
+        classification.saving_amount(amount) - classification.savings_withdrawal_amount(amount);
+    if saving != Decimal::ZERO {
+        (saving, SAVINGS_TAXONOMY)
+    } else {
+        (classification.spending_amount(amount), SPENDING_TAXONOMY)
+    }
 }
 
 /// The pot an activity was pinned to, if any.
@@ -1353,6 +1383,27 @@ mod tests {
         assert_eq!(
             clamp_day(2026, 12, 22),
             NaiveDate::from_ymd_opt(2026, 12, 22).unwrap()
+        );
+    }
+
+    #[test]
+    fn moves_to_investing_leave_a_pot_and_come_back() {
+        let amount = Decimal::from(100);
+        assert_eq!(
+            pot_flow(SpendingClassification::Saving, amount),
+            (amount, SAVINGS_TAXONOMY)
+        );
+        assert_eq!(
+            pot_flow(SpendingClassification::FromSavings, amount),
+            (-amount, SAVINGS_TAXONOMY)
+        );
+        assert_eq!(
+            pot_flow(SpendingClassification::Expense, amount),
+            (amount, SPENDING_TAXONOMY)
+        );
+        assert_eq!(
+            pot_flow(SpendingClassification::InternalTransfer, amount),
+            (Decimal::ZERO, SPENDING_TAXONOMY)
         );
     }
 

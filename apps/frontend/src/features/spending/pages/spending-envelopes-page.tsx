@@ -69,6 +69,7 @@ import {
 } from "../types/envelopes";
 
 const SPENDING_TAXONOMY = "spending_categories";
+const SAVINGS_TAXONOMY = "savings_categories";
 const INCOME_TAXONOMY = "income_sources";
 const CARD = "bg-card border-border/60 rounded-xl border shadow-sm";
 /** Hex, because <input type="color"> cannot hold a CSS variable. */
@@ -1157,10 +1158,15 @@ function LinksDialog({
   const { t } = useTranslation();
   const m = useEnvelopeMutations();
   const taxonomy = useTaxonomy(SPENDING_TAXONOMY);
+  // Savings categories come last: they send moves to investing accounts to a pot.
+  const savings = useTaxonomy(SAVINGS_TAXONOMY);
   const categories = useMemo(() => {
-    const cats = (taxonomy.data?.categories ?? [])
-      .slice()
-      .sort((a, b) => a.sortOrder - b.sortOrder);
+    const bySortOrder = (list: TaxonomyCategory[] = []) =>
+      list.slice().sort((a, b) => a.sortOrder - b.sortOrder);
+    const cats = [
+      ...bySortOrder(taxonomy.data?.categories),
+      ...bySortOrder(savings.data?.categories),
+    ];
     const byParent = new Map<string | null, TaxonomyCategory[]>();
     for (const c of cats) {
       const key = c.parentId ?? null;
@@ -1175,7 +1181,7 @@ function LinksDialog({
     };
     walk(null, 0);
     return out;
-  }, [taxonomy.data?.categories]);
+  }, [taxonomy.data?.categories, savings.data?.categories]);
 
   // categoryId -> "" (envelope) | billId
   const initial = useMemo(() => {
