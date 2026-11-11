@@ -18,6 +18,8 @@ export interface AccountSelectOption {
   label: string;
   currency: string;
   accountType?: string;
+  /** The account's raw meta (fork: trade fee percentages live there). */
+  meta?: string;
   /** Activity restriction level based on account tracking mode. */
   restrictionLevel?: "none" | "limited" | "blocked";
 }

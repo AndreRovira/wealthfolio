@@ -407,6 +407,7 @@ const ActivityPage = () => {
         label: account.name,
         currency: account.currency,
         accountType: account.accountType,
+        meta: account.meta,
         restrictionLevel: getActivityRestrictionLevel(account),
       }));
   }, [accounts, investmentAccounts, isSpendingEnabled, selectedActivity?.accountId]);
@@ -424,6 +425,7 @@ const ActivityPage = () => {
           label: account.name,
           currency: account.currency,
           accountType: account.accountType,
+          meta: account.meta,
           restrictionLevel: getActivityRestrictionLevel(account),
         })),
     [accounts],

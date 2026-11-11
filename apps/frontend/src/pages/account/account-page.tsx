@@ -370,6 +370,7 @@ const AccountPage = () => {
           label: acc.name,
           currency: acc.currency,
           accountType: acc.accountType,
+          meta: acc.meta,
           restrictionLevel: getActivityRestrictionLevel(acc),
         })),
     [accounts],

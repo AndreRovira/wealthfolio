@@ -10,6 +10,7 @@ import { Switch } from "@wealthfolio/ui/components/ui/switch";
 import { newAccountSchema } from "@/lib/schemas";
 import { AccountType } from "@/lib/constants";
 import { useTaxonomy } from "@/hooks/use-taxonomies";
+import { setTradeFeesInMeta, tradeFeesFromMeta } from "@/lib/trade-fees";
 import { cn } from "@/lib/utils";
 import {
   CurrencyInput,
@@ -205,6 +206,14 @@ export function AccountForm({
   const currentMeta = form.watch("meta");
   const costBasisMethod = getCostBasisMethodFromMeta(currentMeta);
   const savedCostBasisMethod = getCostBasisMethodFromMeta(defaultValues?.meta);
+  // Fork: commission percentages that fill fee and tax on a new trade.
+  const fees = tradeFeesFromMeta(currentMeta);
+  const setFee = (key: "feePercent" | "taxPercent", value: string) =>
+    form.setValue(
+      "meta",
+      setTradeFeesInMeta(form.getValues("meta"), { ...fees, [key]: Number(value) || 0 }),
+      { shouldDirty: true },
+    );
   // Collapsed while the account uses the default; open when it does not, so
   // a non-default method is never hidden.
   const [costBasisOpen, setCostBasisOpen] = useState(
@@ -672,6 +681,37 @@ export function AccountForm({
                           {t("settings:accounts.form_cost_basis_method_changed")}
                         </p>
                       )}
+                    </div>
+                  )}
+                  {showsCostBasisMethod && (
+                    <div className="border-border border-t pt-4">
+                      <span className="text-sm font-medium">
+                        {t("settings:accounts.form_trade_fees_label")}
+                      </span>
+                      <p className="text-muted-foreground mt-1 text-xs">
+                        {t("settings:accounts.form_trade_fees_description")}
+                      </p>
+                      <div className="mt-2 grid grid-cols-2 gap-3">
+                        {(["feePercent", "taxPercent"] as const).map((key) => (
+                          <div key={key} className="flex flex-col gap-1">
+                            <Label htmlFor={`account-${key}`} className="text-xs">
+                              {t(`settings:accounts.form_trade_${key}`)}
+                            </Label>
+                            <Input
+                              id={`account-${key}`}
+                              type="number"
+                              inputMode="decimal"
+                              min="0"
+                              step="any"
+                              className="h-11"
+                              value={fees[key] || ""}
+                              placeholder="0"
+                              disabled={key === "taxPercent" && fees.feePercent <= 0}
+                              onChange={(e) => setFee(key, e.target.value)}
+                            />
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </FormItem>

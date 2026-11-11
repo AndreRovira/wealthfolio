@@ -29,6 +29,8 @@ import { ScrollArea } from "@wealthfolio/ui/components/ui/scroll-area";
 import { Textarea } from "@wealthfolio/ui/components/ui/textarea";
 import { useEffect, useMemo, useState, type RefObject } from "react";
 import { useFormContext } from "react-hook-form";
+
+import { useAutoTradeFees } from "@/lib/trade-fees";
 import { useTranslation } from "react-i18next";
 import { useAmountFormatting } from "@wealthfolio/ui";
 import {
@@ -370,6 +372,12 @@ export function MobileDetailsStep({
   const selectedAccount = filteredAccounts.find((acc) => acc.value === accountId);
   const destinationAccount = filteredAccounts.find((acc) => acc.value === toAccountId);
   const accountCurrency = selectedAccount?.currency;
+  // Fork: the account's commission percentages fill fee and tax.
+  useAutoTradeFees(form, {
+    meta: selectedAccount?.meta,
+    gross: (Number(optQuantity) || 0) * (Number(optUnitPrice) || 0) * (Number(optMultiplier) || 0),
+    enabled: isBuyOrSell && !isEditing,
+  });
   const effectiveSourceCurrency = sourceCurrency || accountCurrency || currency;
   const effectiveDestinationCurrency =
     destinationCurrency || destinationAccount?.currency || effectiveSourceCurrency;

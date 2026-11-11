@@ -395,6 +395,7 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
             label: a.name,
             currency: a.currency,
             accountType: a.accountType,
+            meta: a.meta,
             restrictionLevel: getActivityRestrictionLevel(a),
           })),
       [accounts],

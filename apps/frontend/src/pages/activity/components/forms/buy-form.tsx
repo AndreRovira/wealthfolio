@@ -34,6 +34,7 @@ import {
   type AccountSelectOption,
   type AssetType,
 } from "./fields";
+import { useAutoTradeFees } from "@/lib/trade-fees";
 import { useTradeTotal } from "./use-trade-total";
 
 // Asset metadata schema for custom assets
@@ -413,6 +414,15 @@ export function BuyForm({
     [accounts, accountId],
   );
   const accountCurrency = selectedAccount?.currency;
+  // Fork: the account's commission percentages fill fee and tax.
+  useAutoTradeFees(form, {
+    meta: selectedAccount?.meta,
+    gross:
+      (Number(optQuantity) || 0) *
+      (Number(watch("unitPrice")) || 0) *
+      (isOption ? Number(optMultiplier) || 0 : 1),
+    enabled: !isEditing,
+  });
   const moneyDecimals = cryptoMoneyDecimals(selectedAccount?.accountType, symbolInstrumentType);
   const assetCurrencyFromSymbol = normalizeCurrency(symbolQuoteCcy ?? undefined)?.toUpperCase();
 
