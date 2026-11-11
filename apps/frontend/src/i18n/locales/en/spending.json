@@ -1260,6 +1260,16 @@
     "notLinked": "The rule holds a typed amount, not the one from the plan",
     "missingRef": "Rule line \"{{line}}\" points at a plan line that does not exist: {{ref}}",
     "flagLinesHint": "Flag the net base lines that land in the paycheck deposit on the Income tab.",
+    "tabSavings": "Savings",
+    "block_savings": "Savings",
+    "savingsRate": "Savings rate (of net prorated)",
+    "liquidityTitle": "Liquidity",
+    "colAccount": "Account",
+    "colBalance": "Balance",
+    "colRate": "Rate",
+    "colMonthlyIncome": "Monthly income",
+    "liquidityHint": "Balances are live. Set the annual rate each account pays; accounts without a rate stay out of the total and the weighted rate.",
+    "savingsHelp": "Savings lines take the same formulas as income lines (net.ptu * 50%). Live figures: bill.<name> and envelope.<name> per quincena (a bill's share, an envelope's funding per paycheck), liquidity.income per month.",
     "tabReconcile": "Reconcile"
   },
   "reconcile": {

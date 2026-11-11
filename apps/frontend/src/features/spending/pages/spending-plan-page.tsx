@@ -32,6 +32,7 @@ import { billLastPaid, billShares } from "../lib/bill-cycle";
 import {
   evaluatePlan,
   expectedPaycheck,
+  liquidityYield,
   resolvePlan,
   round2,
   sumQuincena,
@@ -51,6 +52,7 @@ import {
 const CARD = "bg-card border-border/60 rounded-xl border shadow-sm";
 const PLAN_KEY = "spending_income_plan";
 const BLOCKS: PlanBlock[] = ["gross", "net", "base"];
+const SAVINGS_BLOCKS: PlanBlock[] = ["savings"];
 const BASES: PlanBasis[] = ["quincena", "monthly", "annual"];
 
 const newId = () => Math.random().toString(36).slice(2, 10);
@@ -86,10 +88,11 @@ export default function SpendingPlanPage() {
       />
       <PageContent className="space-y-4">
         <Tabs value={tab} onValueChange={(v) => setParams({ tab: String(v) })}>
-          <TabsList className="flex w-full max-w-lg overflow-x-auto sm:grid sm:grid-cols-4">
+          <TabsList className="flex w-full max-w-xl overflow-x-auto sm:grid sm:grid-cols-5">
             <TabsTrigger value="income" className="shrink-0">{t("spending:plan.tabIncome")}</TabsTrigger>
             <TabsTrigger value="paycheck" className="shrink-0">{t("spending:plan.tabPaycheck")}</TabsTrigger>
             <TabsTrigger value="bills" className="shrink-0">{t("spending:plan.tabBills")}</TabsTrigger>
+            <TabsTrigger value="savings" className="shrink-0">{t("spending:plan.tabSavings")}</TabsTrigger>
             <TabsTrigger value="reconcile" className="shrink-0">{t("spending:plan.tabReconcile")}</TabsTrigger>
           </TabsList>
           <TabsContent value="income" className="mt-4">
@@ -109,6 +112,13 @@ export default function SpendingPlanPage() {
           <TabsContent value="bills" className="mt-4">
             {snapshot.data ? <BillsTab snapshot={snapshot.data} /> : <Skeleton className="h-40 w-full" />}
           </TabsContent>
+          <TabsContent value="savings" className="mt-4">
+            {planQuery.data ? (
+              <IncomeEditor initial={planQuery.data} savings />
+            ) : (
+              <Skeleton className="h-40 w-full" />
+            )}
+          </TabsContent>
           <TabsContent value="reconcile" className="mt-4">
             {planQuery.data ? <ReconcileTab plan={planQuery.data} /> : <Skeleton className="h-40 w-full" />}
           </TabsContent>
@@ -120,7 +130,11 @@ export default function SpendingPlanPage() {
 
 // ----------------------------- income -----------------------------
 
-function IncomeEditor({ initial }: { initial: IncomePlanDocument }) {
+/**
+ * Editor for the plan's blocks. `savings` shows the SAVINGS block with its rate
+ * against net prorated and the liquidity accounts instead of the income blocks.
+ */
+function IncomeEditor({ initial, savings = false }: { initial: IncomePlanDocument; savings?: boolean }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const [doc, setDoc] = useState<IncomePlanDocument>(initial);
@@ -129,8 +143,28 @@ function IncomeEditor({ initial }: { initial: IncomePlanDocument }) {
     setDoc(initial);
     setDirty(false);
   }, [initial]);
-  const rows = useMemo(() => evaluatePlan(doc), [doc]);
-  const currency = useEnvelopeSnapshot().data?.currency ?? "MXN";
+  const snapshot = useEnvelopeSnapshot().data;
+  const cash = useReconcile().data?.cash;
+  const rates = doc.liquidity?.rates;
+  const liquid = useMemo<LiquidRow[]>(
+    () =>
+      (cash ?? [])
+        .filter((r) => !r.excluded)
+        .map((r) => ({
+          id: r.account.id,
+          name: r.account.name,
+          balance: r.balance,
+          rate: rates?.[r.account.id],
+        })),
+    [cash, rates],
+  );
+  const liquidityIncome = liquidityYield(liquid).income;
+  const rows = useMemo(
+    () => evaluatePlan(doc, planExternals(snapshot, liquidityIncome)),
+    [doc, snapshot, liquidityIncome],
+  );
+  const netTotal = sumQuincena(rows.filter((r) => r.line.block === "net"));
+  const currency = snapshot?.currency ?? "MXN";
   const save = useMutation({
     mutationFn: () => saveIncomePlan(doc),
     onSuccess: () => {
@@ -183,7 +217,7 @@ function IncomeEditor({ initial }: { initial: IncomePlanDocument }) {
           {t("common:save")}
         </Button>
       </div>
-      {BLOCKS.map((block) => {
+      {(savings ? SAVINGS_BLOCKS : BLOCKS).map((block) => {
         const blockRows = rows
           .filter((r) => r.line.block === block)
           .sort((a, b) => (b.value?.annual ?? -1) - (a.value?.annual ?? -1));
@@ -218,6 +252,12 @@ function IncomeEditor({ initial }: { initial: IncomePlanDocument }) {
                   <PrivacyAmount value={round2(total * 24)} currency={currency} />
                 </span>
               </div>
+              {savings && netTotal > 0 && (
+                <div className="flex items-center justify-between px-1 text-xs font-semibold">
+                  <span>{t("spending:plan.savingsRate")}</span>
+                  <span className="tabular-nums">{((total / netTotal) * 100).toFixed(2)}%</span>
+                </div>
+              )}
             </div>
             <table className="hidden w-full text-xs sm:table">
               <thead className="text-muted-foreground text-2xs uppercase tracking-wide">
@@ -266,16 +306,44 @@ function IncomeEditor({ initial }: { initial: IncomePlanDocument }) {
                   </td>
                   <td colSpan={2} />
                 </tr>
+                {savings && netTotal > 0 && (
+                  <tr>
+                    <td className="px-4 pb-2" colSpan={4}>
+                      {t("spending:plan.savingsRate")}
+                    </td>
+                    <td className="px-2 pb-2 text-end tabular-nums">
+                      {((total / netTotal) * 100).toFixed(2)}%
+                    </td>
+                    <td colSpan={3} />
+                  </tr>
+                )}
               </tfoot>
             </table>
           </section>
         );
       })}
-      <ConstantsEditor
-        doc={doc}
-        onChange={(constants) => update((d) => ({ ...d, constants }))}
-      />
-      <p className="text-muted-foreground text-2xs">{t("spending:plan.formulaHelp")}</p>
+      {savings ? (
+        <LiquidityCard
+          rows={liquid}
+          currency={currency}
+          onRate={(id, rate) =>
+            update((d) => {
+              const next = { ...d.liquidity?.rates };
+              if (rate === null) delete next[id];
+              else next[id] = rate;
+              return { ...d, liquidity: { rates: next } };
+            })
+          }
+        />
+      ) : (
+        <ConstantsEditor
+          doc={doc}
+          onChange={(constants) => update((d) => ({ ...d, constants }))}
+        />
+      )}
+      <p className="text-muted-foreground text-2xs">
+        {t(savings ? "spending:plan.savingsHelp" : "spending:plan.formulaHelp")}
+      </p>
     </div>
   );
 }
@@ -495,6 +563,122 @@ function LineCard({
       ) : null}
       <div className="text-muted-foreground mt-1 font-mono text-2xs">{line.block}.{line.key}</div>
     </div>
+  );
+}
+
+/**
+ * Live figures savings formulas can read: `bill.<name>` and `envelope.<name>`
+ * per quincena (a bill's share, an envelope's scheduled funding) and
+ * `liquidity.income` per month.
+ */
+function planExternals(snapshot: EnvelopeSnapshot | undefined, liquidityIncome: number) {
+  const out: Record<string, number> = { "liquidity.income": liquidityIncome };
+  for (const e of snapshot?.envelopes ?? []) {
+    out[`envelope.${slug(e.envelope.name)}`] = e.periodTarget;
+    for (const b of e.bills) {
+      out[`bill.${slug(b.bill.name)}`] = billShares(b.bill.expectedAmount, b.bill.cycle).quincena;
+    }
+  }
+  return out;
+}
+
+interface LiquidRow {
+  id: string;
+  name: string;
+  balance: number;
+  rate?: number;
+}
+
+/** The spreadsheet's LIQUIDITY block: what each liquid account earns a month. */
+function LiquidityCard({
+  rows,
+  currency,
+  onRate,
+}: {
+  rows: LiquidRow[];
+  currency: string;
+  onRate: (id: string, rate: number | null) => void;
+}) {
+  const { t } = useTranslation();
+  const totals = liquidityYield(rows);
+  const sorted = [...rows].sort(
+    (a, b) => (b.rate ?? -1) - (a.rate ?? -1) || b.balance - a.balance,
+  );
+  return (
+    <section className={cn(CARD, "overflow-x-auto")}>
+      <h3 className="text-foreground px-4 pt-3 text-sm font-semibold">
+        {t("spending:plan.liquidityTitle")}
+      </h3>
+      <table className="w-full text-xs">
+        <thead className="text-muted-foreground text-2xs uppercase tracking-wide">
+          <tr>
+            <th className="px-4 py-2 text-start font-normal">{t("spending:plan.colAccount")}</th>
+            <th className="hidden px-2 py-2 text-end font-normal sm:table-cell">
+              {t("spending:plan.colBalance")}
+            </th>
+            <th className="px-2 py-2 text-end font-normal">{t("spending:plan.colRate")}</th>
+            <th className="px-4 py-2 text-end font-normal">{t("spending:plan.colMonthlyIncome")}</th>
+          </tr>
+        </thead>
+        <tbody className="divide-border/40 divide-y">
+          {sorted.map((r) => (
+            <tr key={r.id} className={cn(r.rate == null && "text-muted-foreground")}>
+              <td className="px-4 py-1.5">
+                {r.name}
+                <span className="text-muted-foreground block text-2xs tabular-nums sm:hidden">
+                  <PrivacyAmount value={r.balance} currency={currency} />
+                </span>
+              </td>
+              <td className="hidden px-2 py-1.5 text-end tabular-nums sm:table-cell">
+                <PrivacyAmount value={r.balance} currency={currency} />
+              </td>
+              <td className="px-2 py-1.5">
+                <div className="flex items-center justify-end gap-1">
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={r.rate ?? ""}
+                    placeholder="—"
+                    aria-label={`${t("spending:plan.colRate")} ${r.name}`}
+                    className="h-7 w-16 text-end text-xs tabular-nums"
+                    onChange={(e) =>
+                      onRate(r.id, e.target.value === "" ? null : Number(e.target.value))
+                    }
+                  />
+                  %
+                </div>
+              </td>
+              <td className="px-4 py-1.5 text-end tabular-nums">
+                {r.rate == null ? (
+                  "—"
+                ) : (
+                  <PrivacyAmount value={(r.balance * r.rate) / 1200} currency={currency} />
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot className="border-border/60 border-t font-semibold">
+          <tr>
+            <td className="px-4 py-2">
+              {t("spending:plan.total")}
+              <span className="block text-2xs font-normal tabular-nums sm:hidden">
+                <PrivacyAmount value={totals.total} currency={currency} />
+              </span>
+            </td>
+            <td className="hidden px-2 py-2 text-end tabular-nums sm:table-cell">
+              <PrivacyAmount value={totals.total} currency={currency} />
+            </td>
+            <td className="px-2 py-2 text-end tabular-nums">{totals.rate.toFixed(2)}%</td>
+            <td className="px-4 py-2 text-end tabular-nums">
+              <PrivacyAmount value={totals.income} currency={currency} />
+            </td>
+          </tr>
+        </tfoot>
+      </table>
+      <p className="text-muted-foreground px-4 pb-3 text-2xs">{t("spending:plan.liquidityHint")}</p>
+    </section>
   );
 }
 

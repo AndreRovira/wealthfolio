@@ -5,7 +5,7 @@
  * cycle or an unknown reference marks the line with an error instead of a value.
  */
 
-export type PlanBlock = "gross" | "net" | "base";
+export type PlanBlock = "gross" | "net" | "base" | "savings";
 export type PlanBasis = "quincena" | "monthly" | "annual";
 
 export interface PlanLine {
@@ -192,11 +192,21 @@ export function toValue(raw: number, basis: PlanBasis, exact: boolean): PlanValu
   return { raw, quincena, monthly: quincena * 2, annual: quincena * 24 };
 }
 
-/** Evaluate every line; references see the referenced line in its own basis. */
-export function evaluatePlan(plan: IncomePlan): EvaluatedLine[] {
+/**
+ * Evaluate every line; references see the referenced line in its own basis.
+ * `external` adds live figures from outside the plan (bill shares, envelope
+ * funding, liquidity income) that formulas read like constants.
+ */
+export function evaluatePlan(
+  plan: IncomePlan,
+  external: Record<string, number> = {},
+): EvaluatedLine[] {
   const byRef = new Map<string, PlanLine>();
   for (const l of plan.lines) byRef.set(`${l.block}.${l.key}`, l);
-  const constants = new Map(plan.constants.map((c) => [c.key, c.value]));
+  const constants = new Map([
+    ...Object.entries(external),
+    ...plan.constants.map((c) => [c.key, c.value] as [string, number]),
+  ]);
   const values = new Map<string, PlanValue>();
   const errors = new Map<string, string>();
   const visiting = new Set<string>();
@@ -262,4 +272,20 @@ export function resolvePlan(plan: IncomePlan): Record<string, number> {
   }
   out[PLAN_EXPECTED_KEY] = expectedPaycheck(rows);
   return out;
+}
+
+/**
+ * What the liquid accounts earn: balance x annual rate / 12 per account. The
+ * total and the weighted rate cover only accounts that have a rate (percent),
+ * so an account nobody rated does not drag the average down.
+ */
+export function liquidityYield(rows: { balance: number; rate?: number | null }[]) {
+  let total = 0;
+  let annual = 0;
+  for (const r of rows) {
+    if (r.rate == null) continue;
+    total += r.balance;
+    annual += (r.balance * r.rate) / 100;
+  }
+  return { total: round2(total), income: annual / 12, rate: total ? (annual / total) * 100 : 0 };
 }

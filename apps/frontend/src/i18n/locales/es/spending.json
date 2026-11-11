@@ -1323,6 +1323,16 @@
     "notLinked": "La regla tiene un monto escrito, no el del plan",
     "missingRef": "La línea \"{{line}}\" de la regla apunta a una línea del plan que no existe: {{ref}}",
     "flagLinesHint": "Marca en la pestaña Ingresos las líneas de neto base que caen en el depósito de la quincena.",
+    "tabSavings": "Ahorro",
+    "block_savings": "Ahorro",
+    "savingsRate": "Tasa de ahorro (del neto prorrateado)",
+    "liquidityTitle": "Liquidez",
+    "colAccount": "Cuenta",
+    "colBalance": "Saldo",
+    "colRate": "Tasa",
+    "colMonthlyIncome": "Ingreso mensual",
+    "liquidityHint": "Los saldos son en vivo. Pon la tasa anual que paga cada cuenta; las cuentas sin tasa quedan fuera del total y de la tasa ponderada.",
+    "savingsHelp": "Las líneas de ahorro aceptan las mismas fórmulas que las de ingreso (net.ptu * 50%). Cifras en vivo: bill.<nombre> y envelope.<nombre> por quincena (la parte de un recibo, lo que recibe un sobre por nómina), liquidity.income por mes.",
     "tabReconcile": "Reconciliar"
   },
   "reconcile": {

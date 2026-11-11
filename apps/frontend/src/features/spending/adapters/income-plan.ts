@@ -7,6 +7,8 @@ import { resolvePlan, type IncomePlan } from "../lib/plan-eval";
 export interface IncomePlanDocument extends IncomePlan {
   paycheck?: { ruleId: string | null; remainderEnvelopeId: string | null };
   reconcile?: { tolerance: number };
+  /** Annual rate in percent each liquid account pays, by account id. */
+  liquidity?: { rates: Record<string, number> };
   /** Evaluated quincena values, rewritten on every save. See `resolvePlan`. */
   resolved?: Record<string, number>;
 }

@@ -1260,6 +1260,16 @@
     "notLinked": "規則使用的是手動輸入的金額，而非計畫金額",
     "missingRef": "規則列「{{line}}」指向不存在的計畫列：{{ref}}",
     "flagLinesHint": "請在收入分頁標記會進入薪資入帳的淨額基本列。",
+    "tabSavings": "儲蓄",
+    "block_savings": "儲蓄",
+    "savingsRate": "儲蓄率（占攤提後淨收入）",
+    "liquidityTitle": "流動資金",
+    "colAccount": "帳戶",
+    "colBalance": "餘額",
+    "colRate": "利率",
+    "colMonthlyIncome": "每月收益",
+    "liquidityHint": "餘額為即時數字。填入各帳戶的年利率；未填利率的帳戶不計入合計與加權利率。",
+    "savingsHelp": "儲蓄項目可用與收入項目相同的公式（net.ptu * 50%）。即時數字：bill.<名稱> 與 envelope.<名稱> 為每半月金額（帳單的分攤額、信封每次發薪的撥款），liquidity.income 為每月金額。",
     "tabReconcile": "對帳"
   },
   "reconcile": {

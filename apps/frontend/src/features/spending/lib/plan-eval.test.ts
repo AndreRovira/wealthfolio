@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { billLastPaid } from "./bill-cycle";
-import { evaluatePlan, resolvePlan, type IncomePlan } from "./plan-eval";
+import { evaluatePlan, liquidityYield, resolvePlan, type IncomePlan } from "./plan-eval";
 
 const plan: IncomePlan = {
   constants: [{ key: "uma.monthly", value: 3519.3, label: "UMA monthly" }],
@@ -57,6 +57,41 @@ describe("evaluatePlan", () => {
     expect(resolved["paycheck.expected"]).toBe(48750);
     // A line that fails to evaluate is left out, not sent as zero.
     expect("net.bad" in resolved).toBe(false);
+  });
+});
+
+describe("savings", () => {
+  it("reads live figures passed from outside the plan", () => {
+    const p: IncomePlan = {
+      constants: [],
+      lines: [
+        { id: "a", block: "savings", key: "allianz", name: "Allianz", basis: "quincena", amount: null, formula: "bill.allianz", inPaycheck: false, sortOrder: 0 },
+        { id: "b", block: "savings", key: "liquidity", name: "Liquidity", basis: "monthly", amount: null, formula: "liquidity.income", inPaycheck: false, sortOrder: 1 },
+      ],
+    };
+    const out = evaluatePlan(p, { "bill.allianz": 3350, "liquidity.income": 4703.7575 });
+    expect(out[0].value?.monthly).toBe(6700);
+    expect(out[1].value?.monthly).toBeCloseTo(4703.7575, 6);
+    // Without the live figure the line reports the missing name.
+    expect(evaluatePlan(p)[0].error).toMatch(/unknown bill.allianz/);
+  });
+  it("weights the liquidity rate by balance, skipping unrated accounts", () => {
+    // The spreadsheet's LIQUIDITY block.
+    const y = liquidityYield([
+      { balance: 25000, rate: 15 },
+      { balance: 25000, rate: 15 },
+      { balance: 25000, rate: 15 },
+      { balance: 23288.79, rate: 15 },
+      { balance: 10000, rate: 15 },
+      { balance: 4422.15, rate: 15 },
+      { balance: 182046.27, rate: 13 },
+      { balance: 30000, rate: 13 },
+      { balance: 119724.34, rate: 10 },
+      { balance: 26065.19 },
+    ]);
+    expect(y.total).toBe(444481.55);
+    expect(y.income).toBeCloseTo(4703.76, 2);
+    expect(y.rate).toBeCloseTo(12.7, 2);
   });
 });
 
