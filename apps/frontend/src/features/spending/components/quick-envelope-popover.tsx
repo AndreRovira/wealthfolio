@@ -79,8 +79,13 @@ export interface QuickEnvelopePopoverProps {
   activityId: string;
   categoryId: string | null;
   metadata: Record<string, unknown> | undefined;
-  /** Only spending shows a pot; income and saving rows render nothing. */
+  /** Spending shows the pot it draws from; saving rows render nothing. */
   isExpense: boolean;
+  /**
+   * Income shows whether the deposit is split by its rule or kept out of the
+   * envelopes (money they already counted, such as an expected credit).
+   */
+  isIncome?: boolean;
   className?: string;
 }
 
@@ -90,6 +95,7 @@ export function QuickEnvelopePopover({
   categoryId,
   metadata,
   isExpense,
+  isIncome = false,
   className,
 }: QuickEnvelopePopoverProps) {
   const { t } = useTranslation();
@@ -109,7 +115,12 @@ export function QuickEnvelopePopover({
       ? { envelopeId: pin.envelopeId, billId: pin.billId }
       : null
     : auto;
-  const label = potLabel(snapshot.data, effective);
+  const excluded = pin !== null && !pin.envelopeId;
+  const label = isIncome
+    ? excluded
+      ? null
+      : t("spending:envelopes.incomeByRule")
+    : potLabel(snapshot.data, effective);
 
   const save = useMutation({
     mutationFn: (envelope: ActivityEnvelope | null) => setActivityEnvelope(activityId, envelope),
@@ -120,7 +131,7 @@ export function QuickEnvelopePopover({
     onError: () => toast.error(t("spending:envelopes.pinFailed")),
   });
 
-  if (!isExpense) return null;
+  if (!isExpense && !isIncome) return null;
 
   const choose = (envelope: ActivityEnvelope | null) => {
     save.mutate(envelope);
@@ -136,7 +147,7 @@ export function QuickEnvelopePopover({
             aria-label={t("spending:envelopes.pickPot")}
             className={cn(
               "hover:bg-muted/60 inline-flex max-w-full items-center gap-1 rounded-md px-1.5 py-0.5 text-2xs transition-colors",
-              pin ? "text-foreground" : "text-muted-foreground",
+              (isIncome ? excluded : pin) ? "text-foreground" : "text-muted-foreground",
               className,
             )}
           />
@@ -145,7 +156,9 @@ export function QuickEnvelopePopover({
         <Icons.Wallet className="h-3 w-3 shrink-0" aria-hidden="true" />
         <span className="truncate">
           {label ?? t("spending:envelopes.noPot")}
-          {pin && <span className="text-muted-foreground"> · {t("spending:envelopes.pinned")}</span>}
+          {(isIncome ? excluded : pin) && (
+            <span className="text-muted-foreground"> · {t("spending:envelopes.pinned")}</span>
+          )}
         </span>
       </PopoverTrigger>
       <PopoverContent className="w-72 p-0" align="start">
@@ -156,18 +169,24 @@ export function QuickEnvelopePopover({
             <CommandGroup>
               <CommandItem value="__auto" onSelect={() => choose(null)}>
                 <Icons.Refresh className="me-2 h-3.5 w-3.5" />
-                {t("spending:envelopes.autoByCategory")}
-                {auto && <span className="text-muted-foreground ms-1 truncate">· {potLabel(snapshot.data, auto)}</span>}
-                {!pin && <Icons.Check className="ms-auto h-3.5 w-3.5" />}
+                {isIncome
+                  ? t("spending:envelopes.incomeByRule")
+                  : t("spending:envelopes.autoByCategory")}
+                {!isIncome && auto && (
+                  <span className="text-muted-foreground ms-1 truncate">
+                    · {potLabel(snapshot.data, auto)}
+                  </span>
+                )}
+                {(isIncome ? !excluded : !pin) && <Icons.Check className="ms-auto h-3.5 w-3.5" />}
               </CommandItem>
               <CommandItem value="__none" onSelect={() => choose({ envelopeId: null, billId: null })}>
                 <Icons.X className="me-2 h-3.5 w-3.5" />
                 {t("spending:envelopes.noPot")}
-                {pin && !pin.envelopeId && <Icons.Check className="ms-auto h-3.5 w-3.5" />}
+                {excluded && <Icons.Check className="ms-auto h-3.5 w-3.5" />}
               </CommandItem>
             </CommandGroup>
-            <CommandSeparator />
-            {snapshot.data?.envelopes.map((e) => (
+            {!isIncome && <CommandSeparator />}
+            {(isIncome ? [] : (snapshot.data?.envelopes ?? [])).map((e) => (
               <CommandGroup key={e.envelope.id} heading={e.envelope.name}>
                 <CommandItem
                   value={e.envelope.name}

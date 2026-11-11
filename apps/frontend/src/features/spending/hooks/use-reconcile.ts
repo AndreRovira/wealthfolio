@@ -36,9 +36,6 @@ export interface Reconcile {
   /** Excel float: liquidity − tax envelope − card debt. */
   float: number;
   /** Float after bills and MSI instalments due in the next 30 days. */
-  float30: number;
-  billsDue30: number;
-  msiDue30: number;
   cash: ReconcileRow[];
   cards: ReconcileRow[];
 }
@@ -96,21 +93,8 @@ export function useReconcile() {
     const cardDebt = sum(cards);
     const loans = holdings.data.filter((h) => h.kind === "liability");
     const msiRemaining = round2(loans.reduce((s, h) => s + Math.max(0, Number(h.marketValue)), 0));
-    const msiDue30 = round2(
-      loans.reduce((s, h) => {
-        const remaining = Math.max(0, Number(h.marketValue));
-        const payment = h.loan?.paymentAmount ?? 0;
-        return s + Math.min(remaining, payment);
-      }, 0),
-    );
     const envelopes = round2(snapshot.data.totalBalance);
     const tax = snapshot.data.envelopes.find((e) => e.envelope.name.toLowerCase() === "tax")?.balance ?? 0;
-    const billsDue30 = round2(
-      snapshot.data.envelopes
-        .flatMap((e) => e.bills)
-        .filter((b) => b.daysLeft !== null && b.daysLeft <= 30)
-        .reduce((s, b) => s + b.bill.expectedAmount, 0),
-    );
     const float = round2(liquidity - tax - cardDebt);
     return {
       currency: snapshot.data.currency,
@@ -120,9 +104,6 @@ export function useReconcile() {
       envelopes,
       difference: round2(liquidity - cardDebt - msiRemaining - envelopes),
       float,
-      float30: round2(float - billsDue30 - msiDue30),
-      billsDue30,
-      msiDue30,
       cash,
       cards,
     };

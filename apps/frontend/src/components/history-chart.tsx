@@ -46,6 +46,8 @@ interface HistoryChartProps {
   minDomainSpanRatio?: number;
   /** The line's colour at or above zero, e.g. `var(--investments)`; below zero it is --loss. */
   color?: string;
+  /** Fork: a balance owed has no deposits to compare against. */
+  hideNetContribution?: boolean;
 }
 
 interface TooltipEntry {
@@ -149,6 +151,7 @@ export function HistoryChart({
   netContributionMaxDomainSpanRatio,
   minDomainSpanRatio,
   color = "var(--gain)",
+  hideNetContribution = false,
 }: HistoryChartProps) {
   const { t } = useTranslation();
   const { triggerHaptic } = useHapticFeedback();
@@ -363,7 +366,7 @@ export function HistoryChart({
             <CustomTooltip
               {...(props as unknown as TooltipBaseProps)}
               isBalanceHidden={isBalanceHidden}
-              isChartHovered={isChartHovered}
+              isChartHovered={isChartHovered && !hideNetContribution}
               color={color}
             />
           )}
@@ -395,7 +398,7 @@ export function HistoryChart({
           fill={`url(#${fillGradientId})`}
           style={{ pointerEvents: "none" }}
         />
-        {scaleConfig.showNetContribution && (
+        {scaleConfig.showNetContribution && !hideNetContribution && (
           <Area
             isAnimationActive={true}
             animationDuration={300}

@@ -101,6 +101,7 @@
   "actions_add_holdings": "Add Holdings",
   "actions_update_holdings": "Update holdings",
   "balance_label": "Balance",
+  "balance_owed": "Balance owed",
   "book_value": "Book Value",
   "period_pnl": "Period P&L",
   "all_time_return": "All-time Return",

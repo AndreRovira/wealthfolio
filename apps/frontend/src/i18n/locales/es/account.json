@@ -101,6 +101,7 @@
   "actions_add_holdings": "Añadir posiciones",
   "actions_update_holdings": "Actualizar posiciones",
   "balance_label": "Saldo",
+  "balance_owed": "Saldo adeudado",
   "book_value": "Valor contable",
   "period_pnl": "G/P del periodo",
   "all_time_return": "Rentabilidad histórica",

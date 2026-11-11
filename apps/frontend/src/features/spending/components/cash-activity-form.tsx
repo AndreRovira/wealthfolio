@@ -73,6 +73,7 @@ import { useSettings } from "@/hooks/use-settings";
 import { AdvancedOptionsSection } from "@/pages/activity/components/forms/fields/advanced-options-section";
 import { useSpendingSettings } from "../hooks/use-spending-settings";
 import { CategoryIconTile } from "./category-chips";
+import { AccountPicker } from "./account-picker";
 import { QuickCategorizePopover } from "./quick-categorize-popover";
 import { QuickEventPopover } from "./quick-event-popover";
 import type { ActivitySplit, CashFlowBucket } from "../types/cash-activity";
@@ -271,7 +272,7 @@ export function CashActivityForm({
   useEffectOnChange(() => {
     if (open) {
       form.reset({
-        accountId: activity?.accountId ?? spendingAccounts[0]?.id ?? "",
+        accountId: activity?.accountId ?? "",
         activityType: (activity?.activityType as FormValues["activityType"]) ?? "WITHDRAWAL",
         activityDate: activity?.activityDate ? new Date(activity.activityDate) : new Date(),
         amount: activity?.amount != null ? Math.abs(parseFloat(activity.amount)) : undefined,
@@ -293,6 +294,10 @@ export function CashActivityForm({
 
   const watchType = form.watch("activityType");
   const watchAccountId = form.watch("accountId");
+  const accountOptions = useMemo(
+    () => spendingAccounts.map((acc) => ({ value: acc.id, label: `${acc.name} (${acc.currency})` })),
+    [spendingAccounts],
+  );
   const selectedAccount = spendingAccounts.find((a) => a.id === watchAccountId);
   const isCreditCardAccount = isCreditCardAccountType(selectedAccount?.accountType);
   const transferActionLabel = isCreditCardAccount
@@ -540,27 +545,30 @@ export function CashActivityForm({
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>{t("common:account")}</FormLabel>
-                          <Select
-                            items={spendingAccounts.map((acc) => ({
-                              value: acc.id,
-                              label: `${acc.name} (${acc.currency})`,
-                            }))}
-                            onValueChange={field.onChange}
+                          <AccountPicker
+                            options={accountOptions}
                             value={field.value}
-                          >
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder={t("spending:cashForm.selectAccount")} />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {spendingAccounts.map((acc) => (
-                                <SelectItem key={acc.id} value={acc.id}>
-                                  {acc.name} ({acc.currency})
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                            onValueChange={field.onChange}
+                            trigger={
+                              <FormControl>
+                                <button
+                                  type="button"
+                                  className="border-input bg-input-bg dark:bg-input/30 hover:bg-accent/30 ring-offset-background focus:ring-ring h-input-height flex w-full items-center justify-between rounded-md border px-3 py-2 text-sm transition-colors focus:ring-2 focus:ring-offset-2 focus:outline-none"
+                                >
+                                  <span
+                                    className={cn(
+                                      "truncate",
+                                      !field.value && "text-muted-foreground",
+                                    )}
+                                  >
+                                    {accountOptions.find((o) => o.value === field.value)?.label ??
+                                      t("spending:cashForm.selectAccount")}
+                                  </span>
+                                  <Icons.ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
+                                </button>
+                              </FormControl>
+                            }
+                          />
                           <FormMessage />
                         </FormItem>
                       )}

@@ -849,7 +849,16 @@ impl EnvelopeService {
             let income_native = classification.income_amount(amount);
             // A pinned activity goes whole to its pot (or to none); otherwise
             // each category allocation follows its link.
-            let pots: Vec<(PotKey, Decimal)> = match activity_pin(activity) {
+            let pin = activity_pin(activity);
+            // A deposit pinned to "no envelope" is money the envelopes already
+            // counted (an expected credit), so no rule proposes a split for it.
+            let income_native = match pin {
+                Some(ActivityEnvelope {
+                    envelope_id: None, ..
+                }) => Decimal::ZERO,
+                _ => income_native,
+            };
+            let pots: Vec<(PotKey, Decimal)> = match pin {
                 Some(ActivityEnvelope {
                     envelope_id: Some(envelope_id),
                     bill_id,

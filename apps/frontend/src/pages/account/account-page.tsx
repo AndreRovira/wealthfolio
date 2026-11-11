@@ -112,6 +112,7 @@ import {
   offsetDateKey,
   toDateKey,
 } from "./cash-audit";
+import { AccountLiabilityBalance } from "./account-liability-balance";
 import AccountSnapshotHistory from "./account-snapshot-history";
 
 interface HistoryChartData {
@@ -1223,7 +1224,20 @@ const AccountPage = () => {
             )}
           </>
         ) : accountDetailTabs.length > 0 ? (
-          accountDetailsContent
+          <>
+            {/* Fork: cards have no valuations, so the block above never shows
+                for them; this gives them their balance owed and its history. */}
+            {isLiabilityAccount && (
+              <AccountLiabilityBalance
+                accountId={id}
+                dateRange={dateRange}
+                today={today}
+                defaultInterval={INITIAL_INTERVAL_CODE}
+                onIntervalSelect={handleIntervalSelect}
+              />
+            )}
+            {accountDetailsContent}
+          </>
         ) : (
           <AccountHoldings
             accountId={id}

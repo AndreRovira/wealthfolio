@@ -56,6 +56,7 @@ import {
 } from "../hooks/use-envelopes";
 import { useSpendingSettings } from "../hooks/use-spending-settings";
 import { SPENDING_THEME, tint } from "../lib/theme";
+import { billShares } from "../lib/bill-cycle";
 import {
   SOURCE_BILL,
   type EnvelopeBalance,
@@ -275,6 +276,12 @@ function EnvelopeCard({
   const range: "short" | "surplus" | null =
     target <= 0 ? null : row.balance < 0 ? "short" : row.balance > target * 1.5 ? "surplus" : null;
   const readyCount = row.bills.filter((b) => b.state === "ready" || b.state === "overdue").length;
+  // What the envelope takes in a year: its bills over their cycles, or the
+  // quincena amount its rule lines add up to.
+  const annual =
+    row.bills.length > 0
+      ? row.bills.reduce((s, b) => s + billShares(b.bill.expectedAmount, b.bill.cycle).annual, 0)
+      : row.periodTarget * 24;
   // Labelled rule lines: what the envelope's quincena amount is made of.
   const components = snapshot.rules
     .filter((r) => r.active)
@@ -338,6 +345,13 @@ function EnvelopeCard({
               >
                 {t(`spending:envelopes.${range}`)}
               </span>
+            )}
+            {annual !== 0 && (
+              <>
+                {" "}
+                · {t("spending:plan.colAnnual")}{" "}
+                <PrivacyAmount value={annual} currency={currency} />
+              </>
             )}
             {row.linkedCategoryIds.length > 0 && (
               <> · {t("spending:envelopes.linkedCount", { count: row.linkedCategoryIds.length })}</>
@@ -406,19 +420,32 @@ function EnvelopeCard({
 
       {open && components.length > 0 && (
         <div className="border-border/60 divide-border/40 divide-y border-t">
+          <div className="text-muted-foreground hidden items-center gap-3 px-4 py-1 text-2xs uppercase tracking-wide sm:flex">
+            <span className="w-5 shrink-0" aria-hidden />
+            <span className="flex-1" />
+            <span className="w-24 shrink-0 text-end">{t("spending:plan.colAnnual")}</span>
+            <span className="w-24 shrink-0 text-end">{t("spending:plan.colQuincena")}</span>
+            <span className="w-6 shrink-0" aria-hidden />
+          </div>
           {components.map((c, i) => (
             <div key={i} className="flex items-center gap-2 px-3 py-1.5 text-xs sm:gap-3 sm:px-4">
               <span className="h-5 w-5 shrink-0" aria-hidden />
-              <span className="text-foreground min-w-0 flex-1 truncate">
-                {c.label}
-                {c.source && (
-                  <span className="bg-muted text-muted-foreground ms-1.5 rounded px-1 py-px font-mono text-2xs">
-                    ={c.source}
-                  </span>
-                )}
+              <span className="min-w-0 flex-1">
+                <span className="text-foreground block truncate">
+                  {c.label}
+                  {c.source && (
+                    <span className="bg-muted text-muted-foreground ms-1.5 rounded px-1 py-px font-mono text-2xs">
+                      ={c.source}
+                    </span>
+                  )}
+                </span>
+                <span className="text-muted-foreground block text-2xs tabular-nums sm:hidden">
+                  {t("spending:plan.colAnnual")}{" "}
+                  <PrivacyAmount value={(c.amount ?? 0) * 24} currency={currency} />
+                </span>
               </span>
-              <span className="text-muted-foreground hidden w-24 shrink-0 text-end sm:inline">
-                {t("spending:envelopes.perQuincena")}
+              <span className="text-muted-foreground hidden w-24 shrink-0 text-end tabular-nums sm:inline">
+                <PrivacyAmount value={(c.amount ?? 0) * 24} currency={currency} />
               </span>
               <span
                 className={cn(
@@ -436,7 +463,17 @@ function EnvelopeCard({
 
       {open && row.bills.length > 0 && (
         <div className="border-border/60 divide-border/40 divide-y border-t">
+          <div className="text-muted-foreground hidden items-center gap-3 px-4 py-1 text-2xs uppercase tracking-wide sm:flex">
+            <span className="w-5 shrink-0" aria-hidden />
+            <span className="flex-1" />
+            <span className="w-20 shrink-0" aria-hidden />
+            <span className="w-24 shrink-0 text-end">{t("spending:envelopes.expectedAmount")}</span>
+            <span className="w-24 shrink-0 text-end">{t("spending:plan.colAnnual")}</span>
+            <span className="w-24 shrink-0 text-end">{t("spending:envelopes.balance")}</span>
+            <span className="w-6 shrink-0" aria-hidden />
+          </div>
           {row.bills.map((b) => {
+            const billAnnual = billShares(b.bill.expectedAmount, b.bill.cycle).annual;
             const ready = b.state === "ready" || b.state === "overdue";
             const past = b.state === "overdue" || b.state === "underfunded";
             const pct =
@@ -464,7 +501,8 @@ function EnvelopeCard({
               >
                 <CategoryIcon icon={icon?.icon ?? null} className="h-3 w-3" />
               </span>
-              <span className="text-foreground min-w-0 flex-1 truncate">
+              <span className="min-w-0 flex-1">
+              <span className="text-foreground block truncate">
                 {b.bill.name}
                 {b.daysLeft !== null && (
                   <span
@@ -492,6 +530,11 @@ function EnvelopeCard({
                   </span>
                 )}
               </span>
+                <span className="text-muted-foreground block text-2xs tabular-nums sm:hidden">
+                  {t("spending:plan.colAnnual")}{" "}
+                  <PrivacyAmount value={billAnnual} currency={currency} />
+                </span>
+              </span>
               <Tooltip>
                 <TooltipTrigger
                   render={
@@ -514,6 +557,9 @@ function EnvelopeCard({
               </Tooltip>
               <span className="text-muted-foreground hidden w-24 shrink-0 text-end tabular-nums sm:inline">
                 <PrivacyAmount value={b.bill.expectedAmount} currency={currency} />
+              </span>
+              <span className="text-muted-foreground hidden w-24 shrink-0 text-end tabular-nums sm:inline">
+                <PrivacyAmount value={billAnnual} currency={currency} />
               </span>
               <span
                 className={cn(

@@ -278,13 +278,14 @@ function TransactionCardImpl({
             )}
           </div>
           {/* Fork: the pot a spend draws from, and the provisional flag, same as the table row. */}
-          {(isOutflow && !isSaving && !isNeutral) || a.metadata?.fxPending === true ? (
+          {(isOutflow && !isSaving && !isNeutral) || isIncome || a.metadata?.fxPending === true ? (
             <div className="mt-0.5 flex items-center gap-1.5">
               <QuickEnvelopePopover
                 activityId={a.id}
                 categoryId={row.category?.id ?? null}
                 metadata={a.metadata}
                 isExpense={isOutflow && !isSaving && !isNeutral}
+                isIncome={isIncome}
                 className="-mx-1 min-w-0"
               />
               {a.metadata?.fxPending === true && (

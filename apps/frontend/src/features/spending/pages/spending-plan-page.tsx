@@ -28,6 +28,7 @@ import { FxPendingCard } from "../components/fx-pending-card";
 import { PaycheckPlanCard } from "../components/paycheck-plan-card";
 import { ENVELOPES_KEY, useEnvelopeMutations, useEnvelopeSnapshot } from "../hooks/use-envelopes";
 import { useReconcile, type Reconcile } from "../hooks/use-reconcile";
+import { billShares } from "../lib/bill-cycle";
 import {
   evaluatePlan,
   expectedPaycheck,
@@ -696,23 +697,12 @@ function PaycheckTab({ snapshot, plan }: { snapshot: EnvelopeSnapshot; plan: Inc
 
 // ----------------------------- bills -----------------------------
 
-function cycleMonths(cycle: string) {
-  const c = cycle.trim();
-  if (c === "monthly") return 1;
-  if (c === "yearly") return 12;
-  const n = Number(c.split(/\s+/)[0]);
-  return Number.isFinite(n) && n > 0 ? n : 1;
-}
-
 function BillsTab({ snapshot }: { snapshot: EnvelopeSnapshot }) {
   const { t } = useTranslation();
   const currency = snapshot.currency;
   const rows = snapshot.envelopes
     .flatMap((e) => e.bills.map((b) => ({ b, envelope: e.envelope.name })))
-    .map(({ b, envelope }) => {
-      const quincena = round2(b.bill.expectedAmount / (cycleMonths(b.bill.cycle) * 2));
-      return { b, envelope, quincena, monthly: round2(quincena * 2), annual: round2(quincena * 24) };
-    })
+    .map(({ b, envelope }) => ({ b, envelope, ...billShares(b.bill.expectedAmount, b.bill.cycle) }))
     .sort((a, b) => b.annual - a.annual);
   const total = (k: "quincena" | "monthly" | "annual") => round2(rows.reduce((s, r) => s + r[k], 0));
   const num = (v: number, cls?: string) => (
@@ -907,14 +897,6 @@ function ReconcileTab({ plan }: { plan: IncomePlanDocument }) {
         {line(t("spending:reconcile.taxEnvelope"), data.liquidity - data.float - data.cardDebt, { minus: true })}
         {line(t("spending:reconcile.cardDebt"), data.cardDebt, { minus: true })}
         {line(t("spending:reconcile.float"), data.float, { strong: true })}
-        <div className="border-border/40 border-t pt-1.5">
-          {line(t("spending:reconcile.billsDue30"), data.billsDue30, { minus: true })}
-          {line(t("spending:reconcile.msiDue30"), data.msiDue30, { minus: true })}
-          {line(t("spending:reconcile.float30"), data.float30, {
-            strong: true,
-            cls: data.float30 < 0 ? "text-destructive" : undefined,
-          })}
-        </div>
       </section>
       <section className={cn(CARD, "space-y-1 p-4")}>
         <h3 className="text-foreground mb-2 text-sm font-semibold">{t("spending:reconcile.liquidity")}</h3>

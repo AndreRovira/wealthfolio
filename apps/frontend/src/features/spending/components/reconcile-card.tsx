@@ -45,7 +45,7 @@ export function ReconcileCard() {
           {t("spending:fxPending.count", { count: pending })}
         </Link>
       )}
-      <div className="grid gap-3 text-xs sm:grid-cols-3">
+      <div className="grid gap-3 text-xs sm:grid-cols-2">
         <div>
           <div className="text-muted-foreground text-2xs uppercase tracking-wide">
             {t("spending:reconcile.difference")}
@@ -59,12 +59,6 @@ export function ReconcileCard() {
           <div className="text-muted-foreground text-2xs uppercase tracking-wide">{t("spending:reconcile.float")}</div>
           <div className="text-sm font-semibold tabular-nums">
             <PrivacyAmount value={data.float} currency={data.currency} />
-          </div>
-        </div>
-        <div>
-          <div className="text-muted-foreground text-2xs uppercase tracking-wide">{t("spending:reconcile.float30")}</div>
-          <div className={cn("text-sm font-semibold tabular-nums", data.float30 < 0 && "text-destructive")}>
-            <PrivacyAmount value={data.float30} currency={data.currency} />
           </div>
         </div>
       </div>
