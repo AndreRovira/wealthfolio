@@ -188,7 +188,7 @@ impl FundingCadence {
 
 /// One line of a funding rule: a fixed amount, or a percent of what is left
 /// after the fixed amounts and earlier percent lines were taken.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FundingSplit {
     pub envelope_id: String,
@@ -198,7 +198,24 @@ pub struct FundingSplit {
     /// 0-100. Percent of the running remainder of the income amount.
     #[serde(default)]
     pub percent: Option<f64>,
+    /// Names the line when an envelope takes several (its components).
+    #[serde(default)]
+    pub label: Option<String>,
+    /// Where `amount` comes from each time the rules are read; the stored
+    /// amount is only the last known value. `bill` = the bill's cost spread
+    /// over its cycle, `remainder` = the plan's expected paycheck minus every
+    /// other fixed line, anything else = an income-plan line (`base.on_call`,
+    /// or `-base.grocery_vouchers` to subtract it), per quincena.
+    #[serde(default)]
+    pub source: Option<String>,
 }
+
+pub const SOURCE_BILL: &str = "bill";
+pub const SOURCE_REMAINDER: &str = "remainder";
+/// Key in the plan's resolved values holding the expected net paycheck.
+pub const PLAN_EXPECTED_KEY: &str = "paycheck.expected";
+/// Settings key of the income plan document.
+pub const INCOME_PLAN_KEY: &str = "spending.income_plan";
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

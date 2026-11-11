@@ -1253,6 +1253,11 @@
     "markPaid": "Marcar pagado",
     "everyMonths": "Cada {{count}} meses",
     "shortfallEnvelope": "El faltante sale de",
+    "lineLabel": "Etiqueta",
+    "lineSource": "Cambiar entre monto escrito y monto enlazado",
+    "sourcePlaceholder": "bill, remainder, base.clave",
+    "perQuincena": "por quincena",
+    "splitHintSource": "= enlaza la línea en vez de escribirla: bill (costo del pago repartido en su ciclo), remainder (quincena esperada menos las demás líneas fijas) o una línea del plan de ingresos como -base.grocery_vouchers.",
     "plan": {
       "title": "Plan de quincena",
       "perDeposit": "por depósito",
@@ -1313,6 +1318,8 @@
     "offBy": "Diferencia",
     "applyToRule": "Aplicar a la regla",
     "inSync": "La regla coincide con el plan",
+    "notLinked": "La regla tiene un monto escrito, no el del plan",
+    "missingRef": "La línea \"{{line}}\" de la regla apunta a una línea del plan que no existe: {{ref}}",
     "flagLinesHint": "Marca en la pestaña Ingresos las líneas de neto base que caen en el depósito de la quincena.",
     "tabReconcile": "Reconciliar"
   },

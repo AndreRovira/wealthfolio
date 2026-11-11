@@ -241,3 +241,25 @@ export function evaluatePlan(plan: IncomePlan): EvaluatedLine[] {
 
 export const sumQuincena = (rows: EvaluatedLine[]) =>
   round2(rows.reduce((s, r) => s + (r.value?.quincena ?? 0), 0));
+
+/** Key under which the expected net paycheck travels to the server. */
+export const PLAN_EXPECTED_KEY = "paycheck.expected";
+
+/** Quincena total of the net-base lines that make up the paycheck deposit. */
+export const expectedPaycheck = (rows: EvaluatedLine[]) =>
+  sumQuincena(rows.filter((r) => r.line.block === "base" && r.line.inPaycheck));
+
+/**
+ * Per-quincena value of every line plus the expected paycheck, in cents. Saved
+ * with the plan so the server can fill rule lines that point at the plan
+ * without evaluating formulas itself.
+ */
+export function resolvePlan(plan: IncomePlan): Record<string, number> {
+  const rows = evaluatePlan(plan);
+  const out: Record<string, number> = {};
+  for (const r of rows) {
+    if (r.value) out[`${r.line.block}.${r.line.key}`] = round2(r.value.quincena);
+  }
+  out[PLAN_EXPECTED_KEY] = expectedPaycheck(rows);
+  return out;
+}

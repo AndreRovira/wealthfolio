@@ -1190,6 +1190,11 @@
     "markPaid": "Mark as paid",
     "everyMonths": "Every {{count}} months",
     "shortfallEnvelope": "Shortfall comes out of",
+    "lineLabel": "Label",
+    "lineSource": "Switch between a typed amount and a linked one",
+    "sourcePlaceholder": "bill, remainder, base.key",
+    "perQuincena": "per quincena",
+    "splitHintSource": "= links a line instead of typing it: bill (the cost of the bill over its cycle), remainder (expected paycheck minus the other fixed lines) or an income-plan line such as -base.grocery_vouchers.",
     "plan": {
       "title": "Paycheck plan",
       "perDeposit": "per deposit",
@@ -1250,6 +1255,8 @@
     "offBy": "Off by",
     "applyToRule": "Apply to rule",
     "inSync": "Rule matches the plan",
+    "notLinked": "The rule holds a typed amount, not the one from the plan",
+    "missingRef": "Rule line \"{{line}}\" points at a plan line that does not exist: {{ref}}",
     "flagLinesHint": "Flag the net base lines that land in the paycheck deposit on the Income tab.",
     "tabReconcile": "Reconcile"
   },

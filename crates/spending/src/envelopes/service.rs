@@ -82,6 +82,77 @@ pub fn period_targets(rules: &[FundingRule]) -> HashMap<String, f64> {
     out
 }
 
+/// Per-quincena values the client wrote into the income plan on its last
+/// save (`resolved`: plan line reference -> amount). The plan's formulas are
+/// evaluated in the client only; the server reads the results.
+pub fn plan_values(document: Option<&str>) -> HashMap<String, f64> {
+    document
+        .and_then(|d| serde_json::from_str::<serde_json::Value>(d).ok())
+        .and_then(|v| v.get("resolved").and_then(|r| r.as_object()).cloned())
+        .map(|map| {
+            map.into_iter()
+                .filter_map(|(k, v)| Some((k, v.as_f64()?)))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Fill the amount of every line that has a `source`, so a change to a bill
+/// or to the income plan reaches the next split without touching the rule.
+/// A bill line of an archived or deleted bill resolves to zero; a plan line
+/// or remainder the plan does not provide keeps its stored amount.
+pub fn resolve_rules(
+    mut rules: Vec<FundingRule>,
+    bills: &[EnvelopeBill],
+    plan: &HashMap<String, f64>,
+) -> Vec<FundingRule> {
+    for rule in &mut rules {
+        let fundings_per_month = match rule.cadence {
+            FundingCadence::Monthly => 1,
+            _ => 2,
+        };
+        for split in &mut rule.splits {
+            match split.source.as_deref() {
+                None | Some(SOURCE_REMAINDER) => {}
+                Some(SOURCE_BILL) => {
+                    let share = bills
+                        .iter()
+                        .find(|b| !b.archived && Some(b.id.as_str()) == split.bill_id.as_deref())
+                        .map(|b| {
+                            dec(b.expected_amount)
+                                / Decimal::from(cycle_months(&b.cycle) * fundings_per_month)
+                        })
+                        .unwrap_or_default();
+                    split.amount = Some(round_half_up(share));
+                }
+                Some(reference) => {
+                    let (sign, key) = match reference.strip_prefix('-') {
+                        Some(key) => (-1.0, key),
+                        None => (1.0, reference),
+                    };
+                    if let Some(value) = plan.get(key.trim()) {
+                        split.amount = Some(f64_of(dec(sign * value)));
+                    }
+                }
+            }
+        }
+        if let Some(expected) = plan.get(PLAN_EXPECTED_KEY) {
+            let is_remainder = |s: &FundingSplit| s.source.as_deref() == Some(SOURCE_REMAINDER);
+            let others: Decimal = rule
+                .splits
+                .iter()
+                .filter(|s| !is_remainder(s))
+                .filter_map(|s| s.amount)
+                .map(dec)
+                .sum();
+            for split in rule.splits.iter_mut().filter(|s| is_remainder(s)) {
+                split.amount = Some(f64_of(dec(*expected) - others));
+            }
+        }
+    }
+    rules
+}
+
 impl EnvelopeService {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -396,7 +467,13 @@ impl EnvelopeService {
         let envelopes = self.repo.list_envelopes().await?;
         let bills = self.repo.list_bills().await?;
         let links = self.repo.list_links().await?;
-        let rules = self.repo.list_rules().await?;
+        let plan = plan_values(
+            self.spending_settings
+                .get_document(INCOME_PLAN_KEY)
+                .await?
+                .as_deref(),
+        );
+        let rules = resolve_rules(self.repo.list_rules().await?, &bills, &plan);
 
         self.materialize_scheduled(&rules, &envelopes, &bills, as_of)
             .await?;
@@ -1012,6 +1089,14 @@ fn clamp_day(year: i32, month: u32, day: u32) -> NaiveDate {
 
 fn validate_rule(input: &FundingRuleInput) -> Result<()> {
     require_name(&input.name)?;
+    for split in input.splits.iter().filter(|s| s.source.is_some()) {
+        if split.percent.is_some() {
+            return Err(anyhow!("a line takes a percent or a source, not both"));
+        }
+        if split.source.as_deref() == Some(SOURCE_BILL) && split.bill_id.is_none() {
+            return Err(anyhow!("a line sourced from a bill needs the bill"));
+        }
+    }
     match input.cadence {
         FundingCadence::OnIncome => {
             if input.income_category_id.as_deref().unwrap_or("").is_empty() {
@@ -1026,7 +1111,11 @@ fn validate_rule(input: &FundingRuleInput) -> Result<()> {
             if input.anchor_date.is_none() {
                 return Err(anyhow!("a scheduled rule needs an anchor date"));
             }
-            if input.splits.iter().any(|s| s.amount.is_none()) {
+            if input
+                .splits
+                .iter()
+                .any(|s| s.amount.is_none() && s.source.is_none())
+            {
                 return Err(anyhow!("scheduled rules need fixed amounts on every line"));
             }
         }
@@ -1058,6 +1147,14 @@ fn f64_of(v: Decimal) -> f64 {
     v.round_dp(2).to_f64().unwrap_or(0.0)
 }
 
+/// Cents with halves away from zero, like the spreadsheet's ROUND (a bill's
+/// cost over its cycle can land on half a cent).
+fn round_half_up(v: Decimal) -> f64 {
+    v.round_dp_with_strategy(2, rust_decimal::RoundingStrategy::MidpointAwayFromZero)
+        .to_f64()
+        .unwrap_or(0.0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1069,6 +1166,7 @@ mod tests {
             bill_id: bill.map(Into::into),
             amount: Some(amount),
             percent: None,
+            ..Default::default()
         };
         let rule = |cadence, splits, active| FundingRule {
             id: "r".into(),
@@ -1119,24 +1217,28 @@ mod tests {
                 bill_id: None,
                 amount: None,
                 percent: Some(2.5),
+                ..Default::default()
             },
             FundingSplit {
                 envelope_id: "inv".into(),
                 bill_id: None,
                 amount: None,
                 percent: Some(48.75),
+                ..Default::default()
             },
             FundingSplit {
                 envelope_id: "disc".into(),
                 bill_id: None,
                 amount: None,
                 percent: Some(48.75),
+                ..Default::default()
             },
             FundingSplit {
                 envelope_id: "fee".into(),
                 bill_id: None,
                 amount: Some(100.0),
                 percent: None,
+                ..Default::default()
             },
         ];
         let out = compute_splits(&splits, Decimal::from(10_100), None);
@@ -1153,12 +1255,14 @@ mod tests {
             bill_id: None,
             amount: Some(amount),
             percent: None,
+            ..Default::default()
         };
         let share = |env: &str, percent: f64| FundingSplit {
             envelope_id: env.into(),
             bill_id: None,
             amount: None,
             percent: Some(percent),
+            ..Default::default()
         };
         let splits = vec![
             fixed("inv", 7000.0),
@@ -1254,5 +1358,143 @@ mod tests {
         let links: HashMap<&str, &EnvelopeCategoryLink> = [("a", &link)].into_iter().collect();
         assert!(resolve_link("a", &links, &meta).is_some());
         assert!(resolve_link("zz", &links, &meta).is_none());
+    }
+
+    #[test]
+    fn sourced_lines_follow_bills_and_plan() {
+        let bill = |id: &str, cost: f64, cycle: &str, archived| EnvelopeBill {
+            id: id.into(),
+            envelope_id: "bills".into(),
+            name: id.into(),
+            expected_amount: cost,
+            due_day: None,
+            cycle: cycle.into(),
+            sort_order: 0,
+            archived,
+            next_due: None,
+        };
+        let line = |env: &str, bill: Option<&str>, amount: Option<f64>, source: Option<&str>| {
+            FundingSplit {
+                envelope_id: env.into(),
+                bill_id: bill.map(Into::into),
+                amount,
+                source: source.map(Into::into),
+                ..Default::default()
+            }
+        };
+        let rule = |cadence, splits| FundingRule {
+            id: "r".into(),
+            name: "r".into(),
+            cadence,
+            anchor_date: None,
+            day_of_month: None,
+            income_category_id: None,
+            splits,
+            active: true,
+            shortfall_envelope_id: None,
+        };
+        let bills = vec![
+            bill("rent", 6700.0, "monthly", false),
+            bill("insurance", 13162.56, "yearly", false),
+            bill("odd", 150.01, "monthly", false),
+            bill("gone", 500.0, "monthly", true),
+        ];
+        let paycheck = vec![
+            line("inv", None, Some(1.0), Some(SOURCE_REMAINDER)),
+            line("disc", None, Some(5500.0), None),
+            line("disc", None, Some(0.0), Some("-base.grocery_vouchers")),
+            line("fam", None, Some(1300.0), None),
+            line("bills", Some("rent"), Some(1.0), Some(SOURCE_BILL)),
+            line("bills", Some("insurance"), Some(1.0), Some(SOURCE_BILL)),
+            line("bills", Some("odd"), Some(1.0), Some(SOURCE_BILL)),
+            line("bills", Some("gone"), Some(250.0), Some(SOURCE_BILL)),
+            line("bills", Some("deleted"), Some(99.0), Some(SOURCE_BILL)),
+            FundingSplit {
+                envelope_id: "inv".into(),
+                percent: Some(50.0),
+                ..Default::default()
+            },
+        ];
+        let plan = plan_values(Some(
+            r#"{"lines":[],"resolved":{"base.grocery_vouchers":1783.11,"paycheck.expected":24820.63}}"#,
+        ));
+        let out = resolve_rules(
+            vec![
+                rule(FundingCadence::OnIncome, paycheck.clone()),
+                rule(
+                    FundingCadence::Monthly,
+                    vec![line("bills", Some("rent"), None, Some(SOURCE_BILL))],
+                ),
+            ],
+            &bills,
+            &plan,
+        );
+        let amounts: Vec<Option<f64>> = out[0].splits.iter().map(|s| s.amount).collect();
+        // remainder = 24,820.63 - (5,500 - 1,783.11 + 1,300 + 3,350 + 548.44 + 75.01)
+        assert_eq!(
+            amounts,
+            vec![
+                Some(15830.29),
+                Some(5500.0),
+                Some(-1783.11),
+                Some(1300.0),
+                Some(3350.0),
+                Some(548.44),
+                Some(75.01),
+                Some(0.0),
+                Some(0.0),
+                None,
+            ]
+        );
+        let fixed: f64 = amounts.iter().flatten().sum();
+        assert!((fixed - 24820.63).abs() < 0.005);
+        // A monthly rule funds once a month, so it takes the whole monthly share.
+        assert_eq!(out[1].splits[0].amount, Some(6700.0));
+
+        // Without plan values a plan line and the remainder keep what is stored.
+        let stale = resolve_rules(
+            vec![rule(FundingCadence::OnIncome, paycheck)],
+            &bills,
+            &plan_values(None),
+        );
+        assert_eq!(stale[0].splits[0].amount, Some(1.0));
+        assert_eq!(stale[0].splits[2].amount, Some(0.0));
+        assert_eq!(stale[0].splits[4].amount, Some(3350.0));
+    }
+
+    #[test]
+    fn sourced_lines_are_validated() {
+        let input = |cadence, split: FundingSplit| FundingRuleInput {
+            name: "r".into(),
+            cadence,
+            anchor_date: NaiveDate::from_ymd_opt(2026, 11, 15),
+            day_of_month: None,
+            income_category_id: Some("cat".into()),
+            splits: vec![split],
+            active: None,
+            shortfall_envelope_id: None,
+        };
+        let sourced = |bill: Option<&str>, percent, source: &str| FundingSplit {
+            envelope_id: "e".into(),
+            bill_id: bill.map(Into::into),
+            percent,
+            source: Some(source.into()),
+            ..Default::default()
+        };
+        assert!(validate_rule(&input(
+            FundingCadence::Semimonthly,
+            sourced(Some("b"), None, SOURCE_BILL)
+        ))
+        .is_ok());
+        assert!(validate_rule(&input(
+            FundingCadence::OnIncome,
+            sourced(None, None, SOURCE_BILL)
+        ))
+        .is_err());
+        assert!(validate_rule(&input(
+            FundingCadence::OnIncome,
+            sourced(None, Some(50.0), SOURCE_REMAINDER)
+        ))
+        .is_err());
     }
 }

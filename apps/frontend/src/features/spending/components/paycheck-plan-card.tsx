@@ -11,7 +11,7 @@ const CARD = "bg-card border-border/60 rounded-xl border shadow-sm";
 /** Rules with fixed lines are the paycheck plan: net in, lines out, rest over. */
 function planRules(snapshot: EnvelopeSnapshot) {
   return snapshot.rules.filter(
-    (r) => r.active && r.splits.some((s) => (s.amount ?? 0) > 0),
+    (r) => r.active && r.splits.some((s) => s.amount != null),
   );
 }
 
@@ -21,7 +21,8 @@ function PlanRows({ rule, snapshot }: { rule: FundingRule; snapshot: EnvelopeSna
     snapshot.envelopes.find((e) => e.envelope.id === id)?.envelope.name ?? id;
   const fixedByEnvelope = new Map<string, number>();
   for (const s of rule.splits) {
-    if ((s.amount ?? 0) > 0) {
+    // Components can be negative (vouchers paid outside the deposit).
+    if (s.amount != null) {
       fixedByEnvelope.set(s.envelopeId, (fixedByEnvelope.get(s.envelopeId) ?? 0) + (s.amount ?? 0));
     }
   }
@@ -51,9 +52,11 @@ function PlanRows({ rule, snapshot }: { rule: FundingRule; snapshot: EnvelopeSna
         </span>
       </div>
       {row(t("spending:envelopes.plan.expected"), expected, { strong: true })}
-      {[...fixedByEnvelope.entries()].map(([id, amount]) => (
-        <div key={id}>{row(name(id), amount, { minus: true })}</div>
-      ))}
+      {[...fixedByEnvelope.entries()]
+        .filter(([, amount]) => amount !== 0)
+        .map(([id, amount]) => (
+          <div key={id}>{row(name(id), amount, { minus: true })}</div>
+        ))}
       <div className="border-border/40 mt-1.5 border-t pt-1.5">
         {surplus.length > 0 &&
           row(

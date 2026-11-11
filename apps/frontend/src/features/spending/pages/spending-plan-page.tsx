@@ -26,10 +26,12 @@ import { cn } from "@/lib/utils";
 import { getIncomePlan, saveIncomePlan, type IncomePlanDocument } from "../adapters/income-plan";
 import { FxPendingCard } from "../components/fx-pending-card";
 import { PaycheckPlanCard } from "../components/paycheck-plan-card";
-import { useEnvelopeMutations, useEnvelopeSnapshot } from "../hooks/use-envelopes";
+import { ENVELOPES_KEY, useEnvelopeMutations, useEnvelopeSnapshot } from "../hooks/use-envelopes";
 import { useReconcile, type Reconcile } from "../hooks/use-reconcile";
 import {
   evaluatePlan,
+  expectedPaycheck,
+  resolvePlan,
   round2,
   sumQuincena,
   type EvaluatedLine,
@@ -37,7 +39,13 @@ import {
   type PlanBlock,
   type PlanLine,
 } from "../lib/plan-eval";
-import type { BillBalance, EnvelopeSnapshot } from "../types/envelopes";
+import {
+  SOURCE_BILL,
+  SOURCE_REMAINDER,
+  type BillBalance,
+  type EnvelopeSnapshot,
+  type FundingSplit,
+} from "../types/envelopes";
 
 const CARD = "bg-card border-border/60 rounded-xl border shadow-sm";
 const PLAN_KEY = "spending_income_plan";
@@ -127,6 +135,8 @@ function IncomeEditor({ initial }: { initial: IncomePlanDocument }) {
     onSuccess: () => {
       setDirty(false);
       void qc.invalidateQueries({ queryKey: [PLAN_KEY] });
+      // Rule lines that read the plan change with it.
+      void qc.invalidateQueries({ queryKey: [ENVELOPES_KEY] });
       toast.success(t("spending:plan.saved"));
     },
     onError: () => toast.error(t("spending:plan.saveFailed")),
@@ -552,37 +562,46 @@ function PaycheckTab({ snapshot, plan }: { snapshot: EnvelopeSnapshot; plan: Inc
   const { t } = useTranslation();
   const qc = useQueryClient();
   const m = useEnvelopeMutations();
-  const rows = useMemo(() => evaluatePlan(plan), [plan]);
-  const expected = sumQuincena(rows.filter((r) => r.line.block === "base" && r.line.inPaycheck));
-  const rules = snapshot.rules.filter((r) => r.active && r.splits.some((s) => (s.amount ?? 0) > 0));
+  const expected = useMemo(() => expectedPaycheck(evaluatePlan(plan)), [plan]);
+  const planRefs = useMemo(() => resolvePlan(plan), [plan]);
+  const rules = snapshot.rules.filter((r) => r.active && r.splits.some((s) => s.amount != null));
   const rule = rules.find((r) => r.id === plan.paycheck?.ruleId) ?? rules[0];
-  const [remainderId, setRemainderId] = useState(plan.paycheck?.remainderEnvelopeId ?? "");
+  const linked = rule?.splits.find((s) => s.source === SOURCE_REMAINDER);
+  const [remainderId, setRemainderId] = useState(
+    linked?.envelopeId ?? plan.paycheck?.remainderEnvelopeId ?? "",
+  );
   const remainder = remainderId || null;
+  // The line that takes what is left: the one already linked, else the
+  // envelope's first fixed line.
+  const target =
+    linked?.envelopeId === remainder
+      ? linked
+      : rule?.splits.find((s) => s.envelopeId === remainder && !s.billId && s.amount != null);
   const fixedOthers = rule
-    ? round2(
-        rule.splits
-          .filter((s) => (s.amount ?? 0) > 0 && !(s.envelopeId === remainder && !s.billId))
-          .reduce((s, x) => s + (x.amount ?? 0), 0),
-      )
+    ? round2(rule.splits.filter((s) => s !== target).reduce((sum, s) => sum + (s.amount ?? 0), 0))
     : 0;
-  const currentRemainder = rule
-    ? round2(
-        rule.splits
-          .filter((s) => s.envelopeId === remainder && !s.billId && (s.amount ?? 0) > 0)
-          .reduce((s, x) => s + (x.amount ?? 0), 0),
-      )
-    : 0;
+  const currentRemainder = target?.amount ?? 0;
   const shouldBe = round2(expected - fixedOthers);
   const diff = round2(shouldBe - currentRemainder);
+  const automatic = target != null && target === linked && Math.abs(diff) < 0.01;
   const envelopeName = (id: string | null) =>
     snapshot.envelopes.find((e) => e.envelope.id === id)?.envelope.name ?? "";
+  // Rule lines pointing at a plan line that was renamed or removed keep their
+  // last amount on the server, so name them here.
+  const planRef = (s: FundingSplit) =>
+    s.source && s.source !== SOURCE_BILL && s.source !== SOURCE_REMAINDER
+      ? s.source.replace(/^-/, "").trim()
+      : null;
+  const missing = (rule?.splits ?? []).filter((s) => {
+    const ref = planRef(s);
+    return ref !== null && !(ref in planRefs);
+  });
 
   const apply = useMutation({
     mutationFn: async () => {
-      if (!rule || !remainder) return;
-      const splits = rule.splits.map((s) =>
-        s.envelopeId === remainder && !s.billId && (s.amount ?? 0) > 0 ? { ...s, amount: shouldBe } : s,
-      );
+      if (!rule || !target) return;
+      // Plan first: the server works the remainder out from its saved values.
+      await saveIncomePlan({ ...plan, paycheck: { ruleId: rule.id, remainderEnvelopeId: remainder } });
       await m.updateRule.mutateAsync({
         id: rule.id,
         input: {
@@ -592,11 +611,16 @@ function PaycheckTab({ snapshot, plan }: { snapshot: EnvelopeSnapshot; plan: Inc
           dayOfMonth: rule.dayOfMonth,
           incomeCategoryId: rule.incomeCategoryId,
           shortfallEnvelopeId: rule.shortfallEnvelopeId,
-          splits,
+          splits: rule.splits.map((s) =>
+            s === target
+              ? { ...s, amount: shouldBe, percent: null, source: SOURCE_REMAINDER }
+              : s.source === SOURCE_REMAINDER
+                ? { ...s, source: null }
+                : s,
+          ),
           active: rule.active,
         },
       });
-      await saveIncomePlan({ ...plan, paycheck: { ruleId: rule.id, remainderEnvelopeId: remainder } });
       void qc.invalidateQueries({ queryKey: [PLAN_KEY] });
     },
     onError: () => toast.error(t("spending:plan.saveFailed")),
@@ -632,20 +656,35 @@ function PaycheckTab({ snapshot, plan }: { snapshot: EnvelopeSnapshot; plan: Inc
           <>
             {line(t("spending:plan.remainderShouldBe", { name: envelopeName(remainder) }), shouldBe, true)}
             {line(t("spending:plan.ruleHasNow"), currentRemainder)}
-            {Math.abs(diff) >= 0.01 ? (
-              <div className="flex items-center justify-between pt-1">
+            {automatic ? (
+              <div className="text-success pt-1 text-xs">{t("spending:plan.inSync")}</div>
+            ) : (
+              <div className="flex items-center justify-between gap-2 pt-1">
                 <span className="text-warning text-xs">
-                  {t("spending:plan.offBy")} <PrivacyAmount value={diff} currency={snapshot.currency} />
+                  {Math.abs(diff) >= 0.01 ? (
+                    <>
+                      {t("spending:plan.offBy")}{" "}
+                      <PrivacyAmount value={diff} currency={snapshot.currency} />
+                    </>
+                  ) : (
+                    t("spending:plan.notLinked")
+                  )}
                 </span>
-                <Button size="sm" onClick={() => apply.mutate()} disabled={apply.isPending || !rule}>
+                <Button size="sm" onClick={() => apply.mutate()} disabled={apply.isPending || !target}>
                   {t("spending:plan.applyToRule")}
                 </Button>
               </div>
-            ) : (
-              <div className="text-success pt-1 text-xs">{t("spending:plan.inSync")}</div>
             )}
           </>
         )}
+        {missing.map((s, i) => (
+          <p key={i} className="text-destructive pt-1 text-2xs">
+            {t("spending:plan.missingRef", {
+              line: s.label || envelopeName(s.envelopeId),
+              ref: planRef(s),
+            })}
+          </p>
+        ))}
         {expected === 0 && (
           <p className="text-muted-foreground pt-1 text-2xs">{t("spending:plan.flagLinesHint")}</p>
         )}

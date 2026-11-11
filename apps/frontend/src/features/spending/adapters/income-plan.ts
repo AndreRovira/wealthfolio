@@ -1,12 +1,14 @@
 import { profileFetch } from "@/features/profiles/session";
 import { notifyUnauthorized } from "@/lib/auth-token";
 
-import type { IncomePlan } from "../lib/plan-eval";
+import { resolvePlan, type IncomePlan } from "../lib/plan-eval";
 
-/** Stored as one JSON document; the server does not interpret it. */
+/** Stored as one JSON document; the server only reads `resolved` from it. */
 export interface IncomePlanDocument extends IncomePlan {
   paycheck?: { ruleId: string | null; remainderEnvelopeId: string | null };
   reconcile?: { tolerance: number };
+  /** Evaluated quincena values, rewritten on every save. See `resolvePlan`. */
+  resolved?: Record<string, number>;
 }
 
 const URL = "/api/v1/spending/income-plan";
@@ -32,4 +34,4 @@ export async function getIncomePlan(): Promise<IncomePlanDocument> {
 }
 
 export const saveIncomePlan = (doc: IncomePlanDocument) =>
-  request<IncomePlanDocument>("PUT", doc);
+  request<IncomePlanDocument>("PUT", { ...doc, resolved: resolvePlan(doc) });

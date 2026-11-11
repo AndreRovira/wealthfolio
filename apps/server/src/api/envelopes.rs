@@ -216,8 +216,6 @@ async fn set_activity_envelope(
     Ok(())
 }
 
-const INCOME_PLAN_KEY: &str = "spending.income_plan";
-
 /// The income plan is a client-evaluated document: lines with amounts or
 /// formulas plus named constants. The server only stores it.
 async fn get_income_plan(

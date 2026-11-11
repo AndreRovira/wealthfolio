@@ -1190,6 +1190,11 @@
     "markPaid": "標記為已付",
     "everyMonths": "每 {{count}} 個月",
     "shortfallEnvelope": "不足由此扣除",
+    "lineLabel": "標籤",
+    "lineSource": "在輸入金額與連結金額之間切換",
+    "sourcePlaceholder": "bill, remainder, base.key",
+    "perQuincena": "每半月",
+    "splitHintSource": "= 會連結該列而非手動輸入：bill（帳單費用依週期分攤）、remainder（預期薪資減去其他固定列）或收入計畫列，例如 -base.grocery_vouchers。",
     "plan": {
       "title": "薪資計畫",
       "perDeposit": "每筆入帳",
@@ -1250,6 +1255,8 @@
     "offBy": "差額",
     "applyToRule": "套用至規則",
     "inSync": "規則與計畫一致",
+    "notLinked": "規則使用的是手動輸入的金額，而非計畫金額",
+    "missingRef": "規則列「{{line}}」指向不存在的計畫列：{{ref}}",
     "flagLinesHint": "請在收入分頁標記會進入薪資入帳的淨額基本列。",
     "tabReconcile": "對帳"
   },

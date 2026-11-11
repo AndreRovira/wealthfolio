@@ -56,14 +56,15 @@ import {
 } from "../hooks/use-envelopes";
 import { useSpendingSettings } from "../hooks/use-spending-settings";
 import { SPENDING_THEME, tint } from "../lib/theme";
-import type {
-  EnvelopeBalance,
-  EnvelopeCategoryLink,
-  EnvelopeSnapshot,
-  FundingCadence,
-  FundingRule,
-  FundingSplit,
-  PendingIncome,
+import {
+  SOURCE_BILL,
+  type EnvelopeBalance,
+  type EnvelopeCategoryLink,
+  type EnvelopeSnapshot,
+  type FundingCadence,
+  type FundingRule,
+  type FundingSplit,
+  type PendingIncome,
 } from "../types/envelopes";
 
 const SPENDING_TAXONOMY = "spending_categories";
@@ -274,6 +275,11 @@ function EnvelopeCard({
   const range: "short" | "surplus" | null =
     target <= 0 ? null : row.balance < 0 ? "short" : row.balance > target * 1.5 ? "surplus" : null;
   const readyCount = row.bills.filter((b) => b.state === "ready" || b.state === "overdue").length;
+  // Labelled rule lines: what the envelope's quincena amount is made of.
+  const components = snapshot.rules
+    .filter((r) => r.active)
+    .flatMap((r) => r.splits)
+    .filter((s) => s.envelopeId === row.envelope.id && !s.billId && s.label && s.amount != null);
 
   return (
     <section className={cn(CARD, "overflow-hidden")}>
@@ -397,6 +403,36 @@ function EnvelopeCard({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      {open && components.length > 0 && (
+        <div className="border-border/60 divide-border/40 divide-y border-t">
+          {components.map((c, i) => (
+            <div key={i} className="flex items-center gap-2 px-3 py-1.5 text-xs sm:gap-3 sm:px-4">
+              <span className="h-5 w-5 shrink-0" aria-hidden />
+              <span className="text-foreground min-w-0 flex-1 truncate">
+                {c.label}
+                {c.source && (
+                  <span className="bg-muted text-muted-foreground ms-1.5 rounded px-1 py-px font-mono text-2xs">
+                    ={c.source}
+                  </span>
+                )}
+              </span>
+              <span className="text-muted-foreground hidden w-24 shrink-0 text-end sm:inline">
+                {t("spending:envelopes.perQuincena")}
+              </span>
+              <span
+                className={cn(
+                  "w-24 shrink-0 text-end tabular-nums",
+                  (c.amount ?? 0) < 0 ? "text-muted-foreground" : "text-foreground",
+                )}
+              >
+                <PrivacyAmount value={c.amount ?? 0} currency={currency} />
+              </span>
+              <span className="w-6 shrink-0" aria-hidden />
+            </div>
+          ))}
+        </div>
+      )}
 
       {open && row.bills.length > 0 && (
         <div className="border-border/60 divide-border/40 divide-y border-t">
@@ -1346,7 +1382,7 @@ function RulesSheet({
                   {r.splits
                     .map(
                       (s) =>
-                        `${potLabel(snapshot, s.envelopeId, s.billId ?? null)} ${s.amount != null ? s.amount : `${s.percent ?? 0}%`}`,
+                        `${s.label ?? potLabel(snapshot, s.envelopeId, s.billId ?? null)} ${s.amount != null ? s.amount : `${s.percent ?? 0}%`}`,
                     )
                     .join(", ")}
                 </div>
@@ -1435,7 +1471,13 @@ function RuleDialog({
       dayOfMonth: cadence === "monthly" ? Number(day) : null,
       incomeCategoryId: cadence === "on_income" ? incomeCategory || null : null,
       shortfallEnvelopeId: cadence === "on_income" ? shortfall || null : null,
-      splits: splits.filter((s) => s.envelopeId),
+      splits: splits
+        .filter((s) => s.envelopeId)
+        .map((s) => ({
+          ...s,
+          label: s.billId ? null : s.label?.trim() || null,
+          source: s.source?.trim() || null,
+        })),
       active,
     };
     if (rule) await m.updateRule.mutateAsync({ id: rule.id, input });
@@ -1525,10 +1567,11 @@ function RuleDialog({
             <p className="text-muted-foreground text-2xs">
               {cadence === "on_income"
                 ? t("spending:envelopes.splitHintIncome")
-                : t("spending:envelopes.splitHintFixed")}
+                : t("spending:envelopes.splitHintFixed")}{" "}
+              {t("spending:envelopes.splitHintSource")}
             </p>
             {splits.map((s, i) => (
-              <div key={i} className="flex items-center gap-2">
+              <div key={i} className="flex flex-wrap items-center gap-2">
                 <ResponsiveSelect
                   value={potKey(s.envelopeId, s.billId)}
                   onValueChange={(v) => {
@@ -1537,35 +1580,76 @@ function RuleDialog({
                   }}
                   options={pots}
                   placeholder={t("spending:envelopes.pickPot")}
-                  triggerClassName="h-8 flex-1 text-xs"
+                  triggerClassName="h-8 min-w-32 flex-1 text-xs"
                 />
-                <Input
-                  type="number"
-                  step="0.01"
-                  className="h-8 w-28 text-end text-xs tabular-nums"
-                  placeholder={t("spending:envelopes.amount")}
-                  value={s.amount ?? ""}
-                  onChange={(ev) =>
-                    setSplit(i, {
-                      amount: ev.target.value === "" ? null : Number(ev.target.value),
-                      percent: null,
-                    })
-                  }
-                />
-                {cadence === "on_income" && (
+                {!s.billId && (
                   <Input
-                    type="number"
-                    step="0.01"
-                    className="h-8 w-20 text-end text-xs tabular-nums"
-                    placeholder="%"
-                    value={s.percent ?? ""}
-                    onChange={(ev) =>
-                      setSplit(i, {
-                        percent: ev.target.value === "" ? null : Number(ev.target.value),
-                        amount: null,
-                      })
-                    }
+                    className="h-8 w-24 text-xs"
+                    placeholder={t("spending:envelopes.lineLabel")}
+                    value={s.label ?? ""}
+                    onChange={(ev) => setSplit(i, { label: ev.target.value })}
                   />
+                )}
+                <button
+                  type="button"
+                  className="text-muted-foreground hover:text-foreground w-4 font-mono text-xs"
+                  title={t("spending:envelopes.lineSource")}
+                  aria-label={t("spending:envelopes.lineSource")}
+                  aria-pressed={s.source != null}
+                  onClick={() =>
+                    setSplit(
+                      i,
+                      s.source != null
+                        ? { source: null }
+                        : { source: s.billId ? SOURCE_BILL : "", percent: null },
+                    )
+                  }
+                >
+                  {s.source != null ? "=" : "#"}
+                </button>
+                {s.source != null ? (
+                  <>
+                    <Input
+                      className="h-8 w-28 font-mono text-xs"
+                      placeholder={t("spending:envelopes.sourcePlaceholder")}
+                      value={s.source}
+                      onChange={(ev) => setSplit(i, { source: ev.target.value })}
+                    />
+                    <span className="text-muted-foreground w-20 truncate text-end text-xs tabular-nums">
+                      {s.amount ?? ""}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      className="h-8 w-28 text-end text-xs tabular-nums"
+                      placeholder={t("spending:envelopes.amount")}
+                      value={s.amount ?? ""}
+                      onChange={(ev) =>
+                        setSplit(i, {
+                          amount: ev.target.value === "" ? null : Number(ev.target.value),
+                          percent: null,
+                        })
+                      }
+                    />
+                    {cadence === "on_income" && (
+                      <Input
+                        type="number"
+                        step="0.01"
+                        className="h-8 w-20 text-end text-xs tabular-nums"
+                        placeholder="%"
+                        value={s.percent ?? ""}
+                        onChange={(ev) =>
+                          setSplit(i, {
+                            percent: ev.target.value === "" ? null : Number(ev.target.value),
+                            amount: null,
+                          })
+                        }
+                      />
+                    )}
+                  </>
                 )}
                 <Button
                   variant="ghost"

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { evaluatePlan, type IncomePlan } from "./plan-eval";
+import { evaluatePlan, resolvePlan, type IncomePlan } from "./plan-eval";
 
 const plan: IncomePlan = {
   constants: [{ key: "uma.monthly", value: 3519.3, label: "UMA monthly" }],
@@ -46,5 +46,15 @@ describe("evaluatePlan", () => {
   it("flags cycles and unknown references", () => {
     expect(by("net.loop").error).toMatch(/cycle/);
     expect(by("net.bad").error).toMatch(/unknown gross.nope/);
+  });
+  it("resolves quincena values and the expected paycheck for the server", () => {
+    const resolved = resolvePlan(plan);
+    // Monthly line reaches the server per quincena, in cents.
+    expect(resolved["gross.sunday"]).toBe(280.68);
+    expect(resolved["base.salary_vt"]).toBe(48750);
+    // Only net-base lines flagged as part of the deposit.
+    expect(resolved["paycheck.expected"]).toBe(48750);
+    // A line that fails to evaluate is left out, not sent as zero.
+    expect("net.bad" in resolved).toBe(false);
   });
 });

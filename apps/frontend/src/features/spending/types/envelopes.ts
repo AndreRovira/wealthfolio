@@ -94,7 +94,18 @@ export interface FundingSplit {
   billId?: string | null;
   amount?: number | null;
   percent?: number | null;
+  /** Names the line when an envelope takes several (its components). */
+  label?: string | null;
+  /**
+   * Where the server takes `amount` from on every read: "bill" (cost over its
+   * cycle), "remainder" (expected paycheck minus the other fixed lines), or an
+   * income-plan line such as "base.on_call" / "-base.grocery_vouchers".
+   */
+  source?: string | null;
 }
+
+export const SOURCE_BILL = "bill";
+export const SOURCE_REMAINDER = "remainder";
 
 export interface FundingRule {
   id: string;
