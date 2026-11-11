@@ -246,6 +246,7 @@
     "manual": "手動",
     "manual_hint": "手動更新餘額",
     "debt_free": "{{date}} 還清",
+    "payments_progress": "已付 {{made}}/{{total}} 期",
     "original_balance": "初始餘額 {{date}}",
     "updated": "更新於 {{date}}",
     "status_paid_off": "已還清",

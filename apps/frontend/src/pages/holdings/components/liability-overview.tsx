@@ -211,7 +211,9 @@ function LiabilityCard({
   const TypeIcon = TYPE_ICONS[model.type] ?? Icons.ReceiptDuotone;
   const typeKey = `asset:altContent.liabilityType.${model.type}`;
   const meta = [
-    t(typeKey, { defaultValue: t("asset:altContent.liabilityType.other") }),
+    model.payments
+      ? t("holdings:liability_cards.payments_progress", model.payments)
+      : t(typeKey, { defaultValue: t("asset:altContent.liabilityType.other") }),
     model.rate != null
       ? `${numbers.formatDecimal(model.rate, { maximumFractionDigits: 2 })}%`
       : null,

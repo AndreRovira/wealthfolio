@@ -24,6 +24,12 @@ export interface LiabilityCardModel {
   frequency: LoanPaymentFrequency | null;
   /** When principal and accrued interest are settled. */
   payoffDate: string | null;
+  /**
+   * Fork: instalments paid out of the plan's total. Only for interest-free
+   * schedules (MSI), where every payment is principal, so the count follows
+   * from the amounts; rounding absorbs the cents banks leave on the last one.
+   */
+  payments: { made: number; total: number } | null;
   status: LiabilityStatus | null;
 }
 
@@ -58,7 +64,19 @@ export function liabilityCardModel(
           : !scheduled && daysSinceUpdate > STALE_MANUAL_DAYS
             ? "update_balance"
             : null;
+  const instalment = scheduled && loan?.annualRate === 0 ? (loan.paymentAmount ?? 0) : 0;
+  const instalments = original && instalment > 0 ? Math.round(original / instalment) : 0;
   return {
+    payments:
+      original && instalments > 0 && balanceAvailable
+        ? {
+            made: Math.max(
+              0,
+              Math.min(instalments, Math.round((original - balance) / instalment)),
+            ),
+            total: instalments,
+          }
+        : null,
     type: typeof subType === "string" && subType ? subType : "other",
     balance,
     balanceAvailable,

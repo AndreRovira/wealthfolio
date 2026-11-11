@@ -101,6 +101,34 @@ describe("liability summary", () => {
   });
 });
 
+it("counts instalments paid on an interest-free plan", () => {
+  const msi: LoanSummary = {
+    balanceSource: "schedule",
+    scheduled: true,
+    originalAmount: 41749.05,
+    annualRate: 0,
+    paymentAmount: 2320,
+    frequency: "monthly",
+    payoffDate: "2027-01-25",
+    renewalMaturity: null,
+  };
+  const card = { sub_type: "credit_card" };
+  // 18 payments of 2,320 round the plan up by cents; 3 are left.
+  expect(liabilityCardModel(holding(msi, card, "6949.05"), today).payments).toEqual({
+    made: 15,
+    total: 18,
+  });
+  // A bank that rounds down leaves cents after the last payment.
+  expect(liabilityCardModel(holding(msi, card, "0.03"), today).payments).toEqual({
+    made: 18,
+    total: 18,
+  });
+  expect(liabilityCardModel(holding(msi, card, "41749.05"), today).payments?.made).toBe(0);
+  // Interest-bearing or manually tracked loans keep their type label.
+  expect(liabilityCardModel(holding(mortgage, { sub_type: "mortgage" }), today).payments).toBeNull();
+  expect(liabilityCardModel(holding(autoLoan), today).payments).toBeNull();
+});
+
 it("keeps a missing balance actionable without marking the loan paid off", () => {
   const model = liabilityCardModel(holding({ ...autoLoan, balanceSource: null }, {}, "0"), today);
   expect(model).toMatchObject({
