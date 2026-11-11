@@ -288,6 +288,64 @@ function EnvelopeCard({
     .flatMap((r) => r.splits)
     .filter((s) => s.envelopeId === row.envelope.id && !s.billId && s.label && s.amount != null);
 
+  // Quincena progress, annual total and links. Beside the name on wide screens,
+  // on its own row on a phone, where the name column is too narrow to hold it.
+  const meta = (
+    <>
+      {target > 0 ? (
+        <>
+          <span className="bg-muted/40 hidden h-1 w-16 shrink-0 overflow-hidden rounded-full sm:block">
+            <span
+              className="block h-full rounded-full"
+              style={{
+                width: `${periodPct * 100}%`,
+                backgroundColor: periodOut > target ? "var(--destructive)" : accent,
+              }}
+            />
+          </span>
+          {t("spending:envelopes.thisPeriod")}:{" "}
+          <PrivacyAmount value={periodOut} currency={currency} />{" "}
+          {t("spending:envelopes.of")}{" "}
+          <PrivacyAmount value={target} currency={currency} />
+        </>
+      ) : (
+        <>
+          {t("spending:envelopes.thisMonth")}:{" "}
+          <PrivacyAmount value={row.fundedThisMonth} currency={currency} />{" "}
+          {t("spending:envelopes.in")} ·{" "}
+          <PrivacyAmount value={row.spentThisMonth} currency={currency} />{" "}
+          {t("spending:envelopes.out")}
+        </>
+      )}
+      {range && (
+        <span
+          className={cn(
+            "rounded px-1 py-px",
+            range === "short" ? "bg-destructive/15 text-destructive" : "bg-warning/15 text-warning",
+          )}
+        >
+          {t(`spending:envelopes.${range}`)}
+        </span>
+      )}
+      {annual !== 0 && (
+        <>
+          {" "}
+          · {t("spending:plan.colAnnual")}{" "}
+          <PrivacyAmount value={annual} currency={currency} />
+        </>
+      )}
+      {row.linkedCategoryIds.length > 0 && (
+        <> · {t("spending:envelopes.linkedCount", { count: row.linkedCategoryIds.length })}</>
+      )}
+      {readyCount > 0 && (
+        <span className="text-success">
+          {" "}
+          · {t("spending:envelopes.readyCount", { count: readyCount })}
+        </span>
+      )}
+    </>
+  );
+
   return (
     <section className={cn(CARD, "overflow-hidden")}>
       <div className="flex items-center gap-2 px-3 py-2 sm:gap-3 sm:px-4">
@@ -310,58 +368,8 @@ function EnvelopeCard({
         </span>
         <div className="min-w-0 flex-1">
           <div className="text-foreground truncate text-sm font-semibold">{row.envelope.name}</div>
-          <div className="text-muted-foreground text-2xs flex items-center gap-1.5 truncate tabular-nums">
-            {target > 0 ? (
-              <>
-                <span className="bg-muted/40 hidden h-1 w-16 shrink-0 overflow-hidden rounded-full sm:block">
-                  <span
-                    className="block h-full rounded-full"
-                    style={{
-                      width: `${periodPct * 100}%`,
-                      backgroundColor: periodOut > target ? "var(--destructive)" : accent,
-                    }}
-                  />
-                </span>
-                {t("spending:envelopes.thisPeriod")}:{" "}
-                <PrivacyAmount value={periodOut} currency={currency} />{" "}
-                {t("spending:envelopes.of")}{" "}
-                <PrivacyAmount value={target} currency={currency} />
-              </>
-            ) : (
-              <>
-                {t("spending:envelopes.thisMonth")}:{" "}
-                <PrivacyAmount value={row.fundedThisMonth} currency={currency} />{" "}
-                {t("spending:envelopes.in")} ·{" "}
-                <PrivacyAmount value={row.spentThisMonth} currency={currency} />{" "}
-                {t("spending:envelopes.out")}
-              </>
-            )}
-            {range && (
-              <span
-                className={cn(
-                  "rounded px-1 py-px",
-                  range === "short" ? "bg-destructive/15 text-destructive" : "bg-warning/15 text-warning",
-                )}
-              >
-                {t(`spending:envelopes.${range}`)}
-              </span>
-            )}
-            {annual !== 0 && (
-              <>
-                {" "}
-                · {t("spending:plan.colAnnual")}{" "}
-                <PrivacyAmount value={annual} currency={currency} />
-              </>
-            )}
-            {row.linkedCategoryIds.length > 0 && (
-              <> · {t("spending:envelopes.linkedCount", { count: row.linkedCategoryIds.length })}</>
-            )}
-            {readyCount > 0 && (
-              <span className="text-success">
-                {" "}
-                · {t("spending:envelopes.readyCount", { count: readyCount })}
-              </span>
-            )}
+          <div className="text-muted-foreground text-2xs hidden items-center gap-1.5 truncate tabular-nums sm:flex">
+            {meta}
           </div>
         </div>
         <div className="text-end">
@@ -417,6 +425,7 @@ function EnvelopeCard({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+      <div className="text-muted-foreground text-2xs px-3 pb-2 tabular-nums sm:hidden">{meta}</div>
 
       {open && components.length > 0 && (
         <div className="border-border/60 divide-border/40 divide-y border-t">
