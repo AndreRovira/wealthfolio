@@ -17,7 +17,12 @@ describe("trade fees", () => {
     expect(JSON.parse(meta).accounting).toEqual({ costBasisMethod: "FIFO" });
     expect(tradeFeesFromMeta(meta)).toEqual({ feePercent: 0.25, taxPercent: 16 });
     expect(tradeFeesFromMeta("not json")).toEqual({ feePercent: 0, taxPercent: 0 });
-    expect(JSON.parse(setTradeFeesInMeta(meta, { feePercent: 0, taxPercent: 16 }))).toEqual({
+    // A fee retyped from 0 keeps the tax beside it; both at 0 removes the entry.
+    expect(tradeFeesFromMeta(setTradeFeesInMeta(meta, { feePercent: 0, taxPercent: 16 }))).toEqual({
+      feePercent: 0,
+      taxPercent: 16,
+    });
+    expect(JSON.parse(setTradeFeesInMeta(meta, { feePercent: 0, taxPercent: 0 }))).toEqual({
       accounting: { costBasisMethod: "FIFO" },
     });
   });

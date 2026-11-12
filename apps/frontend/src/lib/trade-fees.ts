@@ -33,7 +33,9 @@ export function setTradeFeesInMeta(meta: string | null | undefined, fees: TradeF
   } catch {
     parsed = {};
   }
-  if (fees.feePercent > 0) parsed.tradeFees = fees;
+  // Kept while either is set: the fee passes through 0 while it is retyped,
+  // and that must not drop the tax beside it.
+  if (fees.feePercent > 0 || fees.taxPercent > 0) parsed.tradeFees = fees;
   else delete parsed.tradeFees;
   return JSON.stringify(parsed);
 }
@@ -55,23 +57,30 @@ interface FeeForm {
 
 /**
  * Fills fee and tax from the account's percentages while a new trade is typed.
- * It stops at the first value entered by hand: the fields then no longer hold
- * what was filled in.
+ * Each field is followed on its own and only while it still holds what was
+ * filled in: a value entered by hand stays. An account without percentages
+ * fills zeros, which clears what the previous account had filled.
  */
 export function useAutoTradeFees(
   form: FeeForm,
   { meta, gross, enabled }: { meta?: string | null; gross: number; enabled: boolean },
 ) {
   const rates = useMemo(() => tradeFeesFromMeta(meta), [meta]);
-  const filled = useRef({ fee: 0, tax: 0 });
+  const filled = useRef<{ fee: number; tax: number } | null>(null);
   useEffect(() => {
-    if (!enabled || rates.feePercent <= 0) return;
-    const fee = Number(form.getValues("fee")) || 0;
-    const tax = Number(form.getValues("tax")) || 0;
-    if (fee !== filled.current.fee || tax !== filled.current.tax) return;
+    if (!enabled) return;
     const next = tradeFees(gross, rates);
-    filled.current = next;
-    if (next.fee !== fee) form.setValue("fee", next.fee, { shouldDirty: true });
-    if (next.tax !== tax) form.setValue("tax", next.tax, { shouldDirty: true });
+    const now = {
+      fee: Number(form.getValues("fee")) || 0,
+      tax: Number(form.getValues("tax")) || 0,
+    };
+    // The phone form remounts this step on Back and Next while the values stay
+    // in the form: values that match the percentages were filled in, not typed.
+    filled.current ??= { fee: now.fee === next.fee ? next.fee : 0, tax: now.tax === next.tax ? next.tax : 0 };
+    for (const field of ["fee", "tax"] as const) {
+      if (now[field] !== filled.current[field]) continue;
+      filled.current[field] = next[field];
+      if (next[field] !== now[field]) form.setValue(field, next[field], { shouldDirty: true });
+    }
   }, [enabled, rates, gross, form]);
 }

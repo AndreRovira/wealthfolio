@@ -157,6 +157,41 @@ interface AccountFormlProps {
   onSuccess?: () => void;
 }
 
+/**
+ * A percentage typed as text. The digits stay as typed: a number field bound to
+ * the parsed value drops "0." on the way to "0.25".
+ */
+function PercentInput({
+  id,
+  value,
+  disabled,
+  onCommit,
+}: {
+  id: string;
+  value: number;
+  disabled?: boolean;
+  onCommit: (value: number) => void;
+}) {
+  const [text, setText] = useState(value ? String(value) : "");
+  return (
+    <Input
+      id={id}
+      type="text"
+      inputMode="decimal"
+      className="h-11"
+      value={text}
+      placeholder="0"
+      disabled={disabled}
+      onChange={(e) => {
+        const next = e.target.value.replace(",", ".");
+        if (!/^\d*\.?\d*$/.test(next)) return;
+        setText(next);
+        onCommit(Number(next) || 0);
+      }}
+    />
+  );
+}
+
 export function AccountForm({
   defaultValues,
   isSynced = false,
@@ -208,12 +243,10 @@ export function AccountForm({
   const savedCostBasisMethod = getCostBasisMethodFromMeta(defaultValues?.meta);
   // Fork: commission percentages that fill fee and tax on a new trade.
   const fees = tradeFeesFromMeta(currentMeta);
-  const setFee = (key: "feePercent" | "taxPercent", value: string) =>
-    form.setValue(
-      "meta",
-      setTradeFeesInMeta(form.getValues("meta"), { ...fees, [key]: Number(value) || 0 }),
-      { shouldDirty: true },
-    );
+  const setFee = (key: "feePercent" | "taxPercent", value: number) =>
+    form.setValue("meta", setTradeFeesInMeta(form.getValues("meta"), { ...fees, [key]: value }), {
+      shouldDirty: true,
+    });
   // Collapsed while the account uses the default; open when it does not, so
   // a non-default method is never hidden.
   const [costBasisOpen, setCostBasisOpen] = useState(
@@ -697,17 +730,11 @@ export function AccountForm({
                             <Label htmlFor={`account-${key}`} className="text-xs">
                               {t(`settings:accounts.form_trade_${key}`)}
                             </Label>
-                            <Input
+                            <PercentInput
                               id={`account-${key}`}
-                              type="number"
-                              inputMode="decimal"
-                              min="0"
-                              step="any"
-                              className="h-11"
-                              value={fees[key] || ""}
-                              placeholder="0"
+                              value={fees[key]}
                               disabled={key === "taxPercent" && fees.feePercent <= 0}
-                              onChange={(e) => setFee(key, e.target.value)}
+                              onCommit={(value) => setFee(key, value)}
                             />
                           </div>
                         ))}
