@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
@@ -213,6 +213,10 @@ impl EnvelopeService {
     }
     pub async fn delete_envelope(&self, id: &str, currency: &str, timezone: &str) -> Result<()> {
         self.require_unused(id, currency, timezone).await?;
+        // Its categories may fall back to a parent linked elsewhere: unlink
+        // them first, so that pot is made whole for the history it receives.
+        self.replace_links(id, Vec::new(), currency, timezone)
+            .await?;
         self.repo.delete_envelope(id).await
     }
     /// An envelope leaves only once it is empty and no rule funds it: its
@@ -277,10 +281,12 @@ impl EnvelopeService {
     pub async fn list_links(&self) -> Result<Vec<EnvelopeCategoryLink>> {
         self.repo.list_links().await
     }
-    /// A category that already fed another pot keeps its past spend there:
-    /// both pots get an adjustment for the history that changed sides, so no
-    /// balance moves and only spend from now on lands in the new pot. A
-    /// category linked for the first time brings its history, as before.
+    /// A category that goes from one pot to another keeps its past spend in
+    /// the old one: both pots get an adjustment for the history that changed
+    /// sides, so no balance moves and only spend from now on lands in the new
+    /// pot. That covers a category that falls back to a parent's pot when its
+    /// own link goes. A category linked for the first time brings its history,
+    /// and one left with no pot takes it away, as before.
     pub async fn replace_links(
         &self,
         envelope_id: &str,
@@ -296,30 +302,26 @@ impl EnvelopeService {
         categories.extend(self.taxonomy_categories(SAVINGS_TAXONOMY)?);
         let meta: HashMap<String, Category> =
             categories.into_iter().map(|c| (c.id.clone(), c)).collect();
-        let moved = moved_links(&before, &links, &meta);
-        if moved.is_empty() {
-            return self.repo.replace_links(envelope_id, links).await;
-        }
-        // First the moves alone, measured by what each pot's spend becomes;
-        // then the rest of the edit (first links, removals), which adjusts nothing.
-        let moves_only = before
+        // What the storage will hold: the newest link wins a category.
+        let after: Vec<EnvelopeCategoryLink> = before
             .iter()
             .filter(|b| {
-                b.envelope_id == envelope_id
-                    && !moved.iter().any(|m| m.category_id == b.category_id)
+                b.envelope_id != envelope_id
+                    && !links.iter().any(|l| l.category_id == b.category_id)
             })
+            .chain(&links)
             .cloned()
-            .chain(moved.iter().cloned())
             .collect();
-        let spent_before = pot_spend(&self.snapshot(None, currency, timezone).await?);
-        self.repo.replace_links(envelope_id, moves_only).await?;
-        let spent_after = pot_spend(&self.snapshot(None, currency, timezone).await?);
+        // Both sides are measured without writing, so the links and their
+        // adjustments reach the ledger together or not at all.
+        let moves = pot_moves(&before, &after, &meta);
+        let spent_before = pot_spend(&self.read(None, currency, timezone, Some(before)).await?);
+        let spent_after = pot_spend(&self.read(None, currency, timezone, Some(moves)).await?);
         let today = activity_date_in_user_timezone(Utc::now(), timezone);
         let adjustments = relink_adjustments(&spent_before, &spent_after, today);
-        if !adjustments.is_empty() {
-            self.repo.insert_entries(adjustments).await?;
-        }
-        self.repo.replace_links(envelope_id, links).await
+        self.repo
+            .replace_links(envelope_id, links, adjustments)
+            .await
     }
 
     pub async fn list_entries(
@@ -577,10 +579,28 @@ impl EnvelopeService {
         currency: &str,
         timezone: &str,
     ) -> Result<EnvelopeSnapshot> {
-        let as_of = as_of.unwrap_or_else(|| activity_date_in_user_timezone(Utc::now(), timezone));
+        self.read(as_of, currency, timezone, None).await
+    }
+
+    /// The snapshot under the stored links, or under `links` to measure what
+    /// an edit would do. Bills settle only on today's view of the stored
+    /// links: a past date sees half the charges, a measurement is not real.
+    async fn read(
+        &self,
+        as_of: Option<NaiveDate>,
+        currency: &str,
+        timezone: &str,
+        links: Option<Vec<EnvelopeCategoryLink>>,
+    ) -> Result<EnvelopeSnapshot> {
+        let today = activity_date_in_user_timezone(Utc::now(), timezone);
+        let as_of = as_of.unwrap_or(today);
+        let settles = links.is_none() && as_of == today;
         let envelopes = self.repo.list_envelopes().await?;
         let bills = self.repo.list_bills().await?;
-        let links = self.repo.list_links().await?;
+        let links = match links {
+            Some(links) => links,
+            None => self.repo.list_links().await?,
+        };
         let plan = plan_values(
             self.spending_settings
                 .get_document(INCOME_PLAN_KEY)
@@ -591,7 +611,6 @@ impl EnvelopeService {
 
         // Reading a future date must not write funding for periods that have
         // not come: later rule changes would never reach those rows.
-        let today = activity_date_in_user_timezone(Utc::now(), timezone);
         self.materialize_scheduled(&rules, &envelopes, &bills, as_of.min(today))
             .await?;
         let entries = self.repo.list_entries(None, None).await?;
@@ -646,9 +665,17 @@ impl EnvelopeService {
             .find(|s| s.source.as_deref() == Some(SOURCE_REMAINDER) && s.bill_id.is_none())
             .map(|s| s.envelope_id.clone())
             .filter(|id| envelopes.iter().any(|e| &e.id == id && !e.archived));
+        let live: HashSet<&str> = envelopes
+            .iter()
+            .filter(|e| !e.archived)
+            .map(|e| e.id.as_str())
+            .collect();
         let mut bills = bills;
-        let mut swept = false;
-        for bill in bills.iter_mut() {
+        let mut settled = false;
+        for bill in bills
+            .iter_mut()
+            .filter(|b| settles && !b.archived && live.contains(b.envelope_id.as_str()))
+        {
             let key = (bill.envelope_id.clone(), Some(bill.id.clone()));
             let (Some(flows), Some(next)) = (bill_flows.get(&key), bill.next_due) else {
                 continue;
@@ -660,42 +687,34 @@ impl EnvelopeService {
             if advanced == next {
                 continue;
             }
-            let leftover = entries
+            let pot: Vec<&EnvelopeEntry> = entries
                 .iter()
                 .filter(|e| {
-                    e.envelope_id == bill.envelope_id
-                        && e.bill_id.as_deref() == Some(&bill.id)
-                        && e.entry_date <= paid
+                    e.envelope_id == bill.envelope_id && e.bill_id.as_deref() == Some(&bill.id)
                 })
-                .map(|e| dec(e.amount))
-                .sum::<Decimal>()
-                - flows
-                    .iter()
-                    .filter(|(date, _)| *date <= paid)
-                    .map(|(_, amount)| *amount)
-                    .sum::<Decimal>();
+                .collect();
             let sweep = match &sweep_to {
-                Some(to) if leftover >= Decimal::new(1, 2) => {
-                    sweep_entries(bill, to, paid, round_half_up(leftover))
-                }
-                _ => Vec::new(),
+                Some(to) => match leftover(&pot, flows, paid) {
+                    Some(amount) => sweep_entries(bill, to, paid, amount),
+                    None => Vec::new(),
+                },
+                None => Vec::new(),
             };
-            let moved = !sweep.is_empty();
             // Only the snapshot that still finds the old due date writes, so
             // two concurrent reads cannot sweep the same leftover twice.
-            if self
-                .repo
+            self.repo
                 .settle_bill(&bill.id, next, advanced, sweep)
-                .await?
-            {
-                swept |= moved;
-            }
-            bill.next_due = Some(advanced);
+                .await?;
+            settled = true;
         }
-        let entries = if swept {
-            self.repo.list_entries(None, None).await?
+        // Whoever won the write, the stored state is what this read reports.
+        let (bills, entries) = if settled {
+            (
+                self.repo.list_bills().await?,
+                self.repo.list_entries(None, None).await?,
+            )
         } else {
-            entries
+            (bills, entries)
         };
         let mut funded: HashMap<PotKey, Decimal> = HashMap::new();
         let mut funded_month: HashMap<String, Decimal> = HashMap::new();
@@ -1226,23 +1245,66 @@ pub fn advance_due(
     next_due
 }
 
-/// The new links whose category, by itself or through a parent, fed a
-/// different pot until now.
-fn moved_links(
+/// The links that carry out only the pot-to-pot part of an edit: every
+/// category that fed a pot (by itself or through a parent) feeds the pot it
+/// ends in, or stays in its old one when the edit leaves it with none. A
+/// category that fed nothing is left out. One link per category, so nothing
+/// here rides on a parent.
+fn pot_moves(
     before: &[EnvelopeCategoryLink],
-    links: &[EnvelopeCategoryLink],
+    after: &[EnvelopeCategoryLink],
     meta: &HashMap<String, Category>,
 ) -> Vec<EnvelopeCategoryLink> {
-    let by_category: HashMap<&str, &EnvelopeCategoryLink> =
-        before.iter().map(|l| (l.category_id.as_str(), l)).collect();
-    links
-        .iter()
-        .filter(|l| {
-            resolve_link(&l.category_id, &by_category, meta)
-                .is_some_and(|was| (&was.envelope_id, &was.bill_id) != (&l.envelope_id, &l.bill_id))
+    fn by_category(links: &[EnvelopeCategoryLink]) -> HashMap<&str, &EnvelopeCategoryLink> {
+        links.iter().map(|l| (l.category_id.as_str(), l)).collect()
+    }
+    let (was, now) = (by_category(before), by_category(after));
+    // Linked categories are named too: one that left its taxonomy still feeds its pot.
+    let ids: BTreeSet<&str> = meta
+        .keys()
+        .map(String::as_str)
+        .chain(before.iter().chain(after).map(|l| l.category_id.as_str()))
+        .collect();
+    ids.into_iter()
+        .filter_map(|id| {
+            let old = resolve_link(id, &was, meta)?;
+            let pot = resolve_link(id, &now, meta).unwrap_or(old);
+            Some(EnvelopeCategoryLink {
+                category_id: id.to_string(),
+                envelope_id: pot.envelope_id.clone(),
+                bill_id: pot.bill_id.clone(),
+            })
         })
-        .cloned()
         .collect()
+}
+
+/// What a settled bill's pot still held on the payment date, if there is
+/// anything to sweep. Money taken out since then is no longer there, so it
+/// counts whatever its date. A pot adjusted on or after the payment keeps
+/// what it has: its ledger was corrected after the fact (a category moved
+/// in, a balance set by hand), and that money carries into the next cycle.
+fn leftover(
+    pot: &[&EnvelopeEntry],
+    flows: &[(NaiveDate, Decimal)],
+    paid: NaiveDate,
+) -> Option<f64> {
+    if pot
+        .iter()
+        .any(|e| e.kind == EnvelopeEntryKind::Adjustment && e.entry_date >= paid)
+    {
+        return None;
+    }
+    let held: Decimal = pot
+        .iter()
+        .filter(|e| e.entry_date <= paid || e.amount < 0.0)
+        .map(|e| dec(e.amount))
+        .sum();
+    let charged: Decimal = flows
+        .iter()
+        .filter(|(date, _)| *date <= paid)
+        .map(|(_, amount)| *amount)
+        .sum();
+    (held - charged >= Decimal::new(1, 2)).then(|| round_half_up(held - charged))
 }
 
 /// Spend per pot as the snapshot reports it; the envelope's own pot is what
@@ -1967,6 +2029,46 @@ mod tests {
         assert_eq!(pot(&legs[1]), ("investment".into(), None, 100.0));
         assert!(legs[0].move_id.is_some() && legs[0].move_id == legs[1].move_id);
         assert!(legs.iter().all(|e| e.entry_date == day(18)));
+
+        let entry = |d, amount: f64, kind| EnvelopeEntry {
+            id: String::new(),
+            envelope_id: "bills".into(),
+            bill_id: Some("b".into()),
+            entry_date: day(d),
+            amount,
+            kind,
+            note: None,
+            move_id: None,
+            rule_id: None,
+            period_key: None,
+            activity_id: None,
+        };
+        let flows = [(day(18), dec(900.0)), (day(25), dec(40.0))];
+        let funding = EnvelopeEntryKind::Funding;
+        // Funding after the payment is the next cycle's; a charge after it too.
+        let pot = [entry(1, 1000.0, funding), entry(30, 500.0, funding)];
+        assert_eq!(
+            leftover(&pot.iter().collect::<Vec<_>>(), &flows, day(18)),
+            Some(100.0)
+        );
+        // Money moved out by hand since then is not swept a second time.
+        let pot = [
+            entry(1, 1000.0, funding),
+            entry(20, -100.0, EnvelopeEntryKind::Move),
+        ];
+        assert_eq!(
+            leftover(&pot.iter().collect::<Vec<_>>(), &flows, day(18)),
+            None
+        );
+        // A pot corrected after the payment keeps its money for the next cycle.
+        let pot = [
+            entry(1, 1000.0, funding),
+            entry(19, 900.0, EnvelopeEntryKind::Adjustment),
+        ];
+        assert_eq!(
+            leftover(&pot.iter().collect::<Vec<_>>(), &flows, day(18)),
+            None
+        );
     }
 
     #[test]
@@ -1999,11 +2101,20 @@ mod tests {
         ]
         .into_iter()
         .collect();
-        let before = vec![link("food", "home")];
-        // Coffee followed its parent into Home; Gym fed nothing; Food stays put.
-        let moved = moved_links(&before, &[link("coffee", "fun"), link("gym", "fun")], &meta);
-        assert_eq!(moved, vec![link("coffee", "fun")]);
-        assert!(moved_links(&before, &[link("food", "home")], &meta).is_empty());
+        let before = vec![link("food", "home"), link("coffee", "fun")];
+        // Gym is linked for the first time, so it is left out and brings its
+        // history. Coffee loses its link and falls back to Food's pot: a move.
+        let after = vec![link("food", "home"), link("gym", "fun")];
+        assert_eq!(
+            pot_moves(&before, &after, &meta),
+            vec![link("coffee", "home"), link("food", "home")]
+        );
+        // Food leaves Home for good: nothing to fall back to, so its history
+        // and Coffee's stay put for this part and go with the removal.
+        assert_eq!(
+            pot_moves(&before, &[link("coffee", "fun")], &meta),
+            vec![link("coffee", "fun"), link("food", "home")]
+        );
 
         let pots = |home: f64, fun: f64| -> HashMap<PotKey, Decimal> {
             [

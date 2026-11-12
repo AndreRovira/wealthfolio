@@ -297,7 +297,13 @@ describe("cash balance editing", () => {
     const split = [{ envelopeId: "investment", billId: null, amount: 5 }];
     envelopes.getEnvelopeSnapshot.mockResolvedValue({
       pendingIncome: [
-        { activityId: "adjustment-1", ruleId: "rule-1", date: "2026-06-01", proposed: split },
+        {
+          activityId: "adjustment-1",
+          ruleId: "rule-1",
+          date: "2026-06-01",
+          amount: 5,
+          proposed: split,
+        },
       ],
     });
     envelopes.applyIncome.mockResolvedValue([]);
@@ -311,6 +317,42 @@ describe("cash balance editing", () => {
         splits: split,
       }),
     );
+  });
+
+  it("leaves interest pending when the rule's split is not the deposit handed out", async () => {
+    plan.getIncomePlan.mockResolvedValue({
+      lines: [],
+      constants: [],
+      liquidity: { rates: { "account-1": 9.5 } },
+    });
+    const user = userEvent.setup();
+    renderMetrics({ cashCurrencySplit: [cashCurrencySplit[1]] });
+
+    await user.click(screen.getByRole("button", { name: "Adjust cash balance" }));
+    const input = screen.getByLabelText("New balance");
+    await user.clear(input);
+    await user.type(input, "105");
+    expect(await screen.findByText("Interest: 5 USD")).toBeInTheDocument();
+
+    // A paycheck-shaped rule: fixed lines in full, the gap taken from one envelope.
+    envelopes.getEnvelopeSnapshot.mockResolvedValue({
+      pendingIncome: [
+        {
+          activityId: "adjustment-1",
+          ruleId: "rule-1",
+          date: "2026-06-01",
+          amount: 5,
+          proposed: [
+            { envelopeId: "bills", billId: null, amount: 1000 },
+            { envelopeId: "investment", billId: null, amount: -995 },
+          ],
+        },
+      ],
+    });
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(envelopes.getEnvelopeSnapshot).toHaveBeenCalled());
+    expect(envelopes.applyIncome).not.toHaveBeenCalled();
   });
 
   it("initializes a fresh draft when reopened", async () => {

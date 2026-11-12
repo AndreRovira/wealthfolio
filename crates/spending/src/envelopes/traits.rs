@@ -29,11 +29,13 @@ pub trait EnvelopeRepositoryTrait: Send + Sync {
     ) -> Result<bool>;
 
     async fn list_links(&self) -> Result<Vec<EnvelopeCategoryLink>>;
-    /// Replace every link that points at `envelope_id` with `links`.
+    /// Replace every link that points at `envelope_id` with `links`, and
+    /// write `adjustments` with them: both or neither.
     async fn replace_links(
         &self,
         envelope_id: &str,
         links: Vec<EnvelopeCategoryLink>,
+        adjustments: Vec<NewEnvelopeEntry>,
     ) -> Result<()>;
 
     async fn list_entries(

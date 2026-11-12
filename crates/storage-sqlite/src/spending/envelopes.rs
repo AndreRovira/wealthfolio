@@ -485,8 +485,10 @@ impl EnvelopeRepositoryTrait for EnvelopeRepository {
         &self,
         envelope_id: &str,
         links: Vec<EnvelopeCategoryLink>,
+        adjustments: Vec<NewEnvelopeEntry>,
     ) -> Result<()> {
         let envelope_id = envelope_id.to_string();
+        let rows = entry_rows(adjustments);
         self.writer
             .exec(move |conn| {
                 conn.transaction::<_, StorageError, _>(|conn| {
@@ -506,6 +508,11 @@ impl EnvelopeRepositoryTrait for EnvelopeRepository {
                         // A category can only feed one pot: the newest link wins.
                         diesel::replace_into(envelope_category_links::table)
                             .values(&row)
+                            .execute(conn)?;
+                    }
+                    for row in &rows {
+                        diesel::insert_into(envelope_entries::table)
+                            .values(row)
                             .execute(conn)?;
                     }
                     Ok(())
@@ -730,6 +737,7 @@ mod tests {
                 envelope_id: envelope.id.clone(),
                 bill_id: Some(bill.id.clone()),
             }],
+            Vec::new(),
         )
         .await
         .unwrap();

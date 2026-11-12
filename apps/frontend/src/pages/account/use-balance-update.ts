@@ -66,12 +66,19 @@ export const useBalanceUpdate = (accountId: string) => {
         );
         // The income rule already says where interest goes: apply its split
         // here, so the deposit does not wait on the envelopes page for a click.
-        // On any failure it stays pending there, as it did before.
+        // Only a split that hands out exactly this deposit: a rule with fixed
+        // lines would fund them in full out of a few cents of interest. That
+        // one, like any failure, stays pending there, as it did before.
         try {
           const pending = (await getEnvelopeSnapshot()).pendingIncome.find(
             (p) => p.activityId === created.id,
           );
-          if (pending) {
+          const handsOutDeposit =
+            pending?.proposed.every((line) => line.amount >= 0) &&
+            Math.abs(
+              pending.proposed.reduce((sum, line) => sum + line.amount, 0) - pending.amount,
+            ) < 0.01;
+          if (pending && handsOutDeposit) {
             await applyIncome({
               ruleId: pending.ruleId,
               activityId: pending.activityId,

@@ -903,7 +903,14 @@ function BillDialog({
       envelopeId,
       name,
       expectedAmount: num(amount),
-      dueDay: nextDue ? Number(nextDue.slice(8, 10)) : null,
+      // A date this dialog did not change may be a clamped one (the 31st that
+      // February held on the 28th): the stored due day stays.
+      dueDay:
+        bill?.dueDay != null && nextDue === bill.nextDue
+          ? bill.dueDay
+          : nextDue
+            ? Number(nextDue.slice(8, 10))
+            : null,
       cycle,
       nextDue: nextDue || null,
     };
