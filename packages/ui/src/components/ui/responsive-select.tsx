@@ -41,7 +41,7 @@ export function ResponsiveSelect({
   disabled,
   triggerClassName,
   contentClassName,
-  sheetTitle = "Select Option",
+  sheetTitle,
   sheetDescription,
   mobileSide = "bottom",
   displayMode = "auto",
@@ -89,7 +89,7 @@ export function ResponsiveSelect({
         <Sheet open={open} onOpenChange={setOpen}>
           <SheetContent side={mobileSide} className="mx-1 h-[80vh] rounded-t-4xl p-0">
             <SheetHeader className="border-border border-b px-6 pt-6 pb-4">
-              <SheetTitle>{sheetTitle}</SheetTitle>
+              <SheetTitle>{sheetTitle ?? t("common:select", "Select Option")}</SheetTitle>
               {sheetDescription ? <SheetDescription>{sheetDescription}</SheetDescription> : null}
             </SheetHeader>
 

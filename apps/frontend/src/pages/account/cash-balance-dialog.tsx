@@ -30,10 +30,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@wealthfolio/ui/components/ui/select";
+import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { z } from "zod";
+import { getIncomePlan } from "@/features/spending/adapters/income-plan";
+
 import { useBalanceUpdate, type BalanceUpdateKind } from "./use-balance-update";
 
 interface CashBalance {
@@ -92,9 +95,12 @@ export function CashBalanceDialog({
   const currentBalance = balances.find((balance) => balance.currency === currency)?.balance;
   const difference = (targetBalance ?? NaN) - (currentBalance ?? NaN);
   const amount = parseFloat(Math.abs(difference).toFixed(DECIMAL_PRECISION));
-  // Interest-bearing accounts are the usual reason to set a balance by hand:
-  // a positive difference books as interest unless told otherwise.
-  const [positiveKind, setPositiveKind] = useState<BalanceUpdateKind>("INTEREST");
+  // A balance that grew by itself is interest only where the plan gives the
+  // account a yield; anywhere else money came in, so it books as a deposit.
+  const plan = useQuery({ queryKey: ["spending_income_plan"], queryFn: getIncomePlan });
+  const paysInterest = (plan.data?.liquidity?.rates[accountId] ?? 0) > 0;
+  const [chosenKind, setPositiveKind] = useState<BalanceUpdateKind | null>(null);
+  const positiveKind = chosenKind ?? (paysInterest ? "INTEREST" : "DEPOSIT");
   const [negativeKind, setNegativeKind] = useState<BalanceUpdateKind>("WITHDRAWAL");
   const activityType = difference > 0 ? positiveKind : negativeKind;
   const kindOptions: { value: BalanceUpdateKind; label: string }[] =

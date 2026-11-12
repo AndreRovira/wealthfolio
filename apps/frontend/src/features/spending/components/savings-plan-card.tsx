@@ -12,6 +12,7 @@ import { QueryKeys } from "@/lib/query-keys";
 import { cn } from "@/lib/utils";
 
 import { AmountInput } from "./amount-input";
+import { LoadFailed } from "./load-failed";
 
 const CARD = "bg-card border-border/60 rounded-xl border shadow-sm";
 
@@ -89,6 +90,7 @@ export function SavingsPlanCard({ periodKey }: { periodKey?: string }) {
   });
 
   const data = snapshot.data;
+  if (snapshot.isError) return <LoadFailed onRetry={() => void snapshot.refetch()} />;
   if (!data) return null;
   const currency = data.currency;
   const rate = (saved: number, income: number) => (income > 0 ? saved / income : 0);
@@ -96,9 +98,7 @@ export function SavingsPlanCard({ periodKey }: { periodKey?: string }) {
   // rest so a plan can be set on them.
   const shownIds = new Set(data.rows.map((r) => r.accountId));
   const extra = showAll
-    ? accounts.filter(
-        (a) => a.isActive && !shownIds.has(a.id) && a.accountType !== "CREDIT_CARD",
-      )
+    ? accounts.filter((a) => a.isActive && !shownIds.has(a.id) && a.accountType !== "CREDIT_CARD")
     : [];
 
   const cell = (v: number, strong?: boolean) => (
@@ -111,13 +111,19 @@ export function SavingsPlanCard({ periodKey }: { periodKey?: string }) {
     <section className={cn(CARD, "overflow-hidden")}>
       <div className="flex items-center gap-2 px-3 py-2 sm:px-4">
         <div className="min-w-0 flex-1">
-          <div className="text-foreground text-sm font-semibold">{t("spending:savingsPlan.title")}</div>
+          <div className="text-foreground text-sm font-semibold">
+            {t("spending:savingsPlan.title")}
+          </div>
           <div className="text-muted-foreground text-2xs">
             {t("spending:savingsPlan.rateMonth")}{" "}
-            {numberFormatting.formatPercent(rate(data.actualMonthTotal, data.incomeMonth), { digits: 0 })}
+            {numberFormatting.formatPercent(rate(data.actualMonthTotal, data.incomeMonth), {
+              digits: 0,
+            })}
             {" · "}
             {t("spending:savingsPlan.rateYtd")}{" "}
-            {numberFormatting.formatPercent(rate(data.actualYtdTotal, data.incomeYtd), { digits: 0 })}
+            {numberFormatting.formatPercent(rate(data.actualYtdTotal, data.incomeYtd), {
+              digits: 0,
+            })}
           </div>
         </div>
         <span className="text-muted-foreground text-2xs w-20 text-end uppercase sm:w-24">
@@ -131,13 +137,28 @@ export function SavingsPlanCard({ periodKey }: { periodKey?: string }) {
         </span>
       </div>
       <div className="border-border/60 divide-border/40 divide-y border-t text-xs">
-        {[...data.rows, ...extra.map((a) => ({ accountId: a.id, accountName: a.name, accountType: a.accountType, plannedMonthly: 0, actualMonth: 0, actualYtd: 0 }))].map((r) => (
-          <div key={r.accountId} className="hover:bg-muted/15 flex items-center gap-2 px-3 py-1.5 sm:px-4">
+        {[
+          ...data.rows,
+          ...extra.map((a) => ({
+            accountId: a.id,
+            accountName: a.name,
+            accountType: a.accountType,
+            plannedMonthly: 0,
+            actualMonth: 0,
+            actualYtd: 0,
+          })),
+        ].map((r) => (
+          <div
+            key={r.accountId}
+            className="hover:bg-muted/15 flex items-center gap-2 px-3 py-1.5 sm:px-4"
+          >
             <span className="text-foreground min-w-0 flex-1 truncate">{r.accountName}</span>
             <div className="w-20 shrink-0 sm:w-24">
               <AmountInput
                 value={r.plannedMonthly}
-                onCommit={(v) => savePlan.mutate({ accountId: r.accountId, amount: Number(v) || 0 })}
+                onCommit={(v) =>
+                  savePlan.mutate({ accountId: r.accountId, amount: Number(v) || 0 })
+                }
               />
             </div>
             {cell(r.actualMonth)}
@@ -147,7 +168,7 @@ export function SavingsPlanCard({ periodKey }: { periodKey?: string }) {
         <div className="flex items-center gap-2 px-3 py-1.5 sm:px-4">
           <button
             type="button"
-            className="text-muted-foreground hover:text-foreground min-w-0 flex-1 truncate text-start text-2xs underline-offset-2 hover:underline"
+            className="text-muted-foreground hover:text-foreground text-2xs min-w-0 flex-1 truncate text-start underline-offset-2 hover:underline"
             onClick={() => setShowAll((v) => !v)}
           >
             {showAll ? t("spending:savingsPlan.hideOthers") : t("spending:savingsPlan.showOthers")}

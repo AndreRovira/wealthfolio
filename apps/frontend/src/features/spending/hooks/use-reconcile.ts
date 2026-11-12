@@ -6,10 +6,9 @@ import { useAccounts } from "@/hooks/use-accounts";
 import { useAlternativeHoldings, useNetWorth } from "@/hooks/use-alternative-assets";
 import type { Account } from "@/lib/types";
 
+import { round2 } from "../lib/plan-eval";
 import { useEnvelopeSnapshot } from "./use-envelopes";
 import { useSpendingSettings } from "./use-spending-settings";
-
-const round2 = (v: number) => Math.round(v * 100) / 100;
 
 function meta(account: Account): Record<string, unknown> {
   try {
@@ -62,7 +61,8 @@ export function useReconcile() {
   });
 
   const data = useMemo<Reconcile | null>(() => {
-    if (!snapshot.data || !valuations.data || !accounts || !holdings.data || !netWorth.data) return null;
+    if (!snapshot.data || !valuations.data || !accounts || !holdings.data || !netWorth.data)
+      return null;
     const byAccount = new Map(valuations.data.map((v) => [v.accountId, v]));
     const cardOwed = new Map<string, number>();
     for (const item of netWorth.data.liabilities.breakdown) {
@@ -94,7 +94,8 @@ export function useReconcile() {
     const loans = holdings.data.filter((h) => h.kind === "liability");
     const msiRemaining = round2(loans.reduce((s, h) => s + Math.max(0, Number(h.marketValue)), 0));
     const envelopes = round2(snapshot.data.totalBalance);
-    const tax = snapshot.data.envelopes.find((e) => e.envelope.name.toLowerCase() === "tax")?.balance ?? 0;
+    const tax =
+      snapshot.data.envelopes.find((e) => e.envelope.name.toLowerCase() === "tax")?.balance ?? 0;
     const float = round2(liquidity - tax - cardDebt);
     return {
       currency: snapshot.data.currency,
@@ -112,6 +113,7 @@ export function useReconcile() {
   return {
     data,
     isLoading:
-      !data && (snapshot.isLoading || valuations.isLoading || holdings.isLoading || netWorth.isLoading),
+      !data &&
+      (snapshot.isLoading || valuations.isLoading || holdings.isLoading || netWorth.isLoading),
   };
 }

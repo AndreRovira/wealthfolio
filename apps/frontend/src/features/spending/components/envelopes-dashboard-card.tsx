@@ -7,6 +7,7 @@ import { DashboardCard } from "@/components/dashboard-card";
 import { cn } from "@/lib/utils";
 
 import { useEnvelopeSnapshot } from "../hooks/use-envelopes";
+import { LoadFailed } from "./load-failed";
 import { SPENDING_THEME, tint } from "../lib/theme";
 
 /** Last calendar day of a YYYY-MM key, as YYYY-MM-DD. */
@@ -40,7 +41,11 @@ export function EnvelopesDashboardCard({
   if (!data) {
     return (
       <DashboardCard title={t("spending:envelopes.heading")} action={manage}>
-        <Skeleton className="h-24 w-full" />
+        {snapshot.isError ? (
+          <LoadFailed onRetry={() => void snapshot.refetch()} />
+        ) : (
+          <Skeleton className="h-24 w-full" />
+        )}
       </DashboardCard>
     );
   }
@@ -56,7 +61,12 @@ export function EnvelopesDashboardCard({
         daysLeft: b.daysLeft,
       })),
     )
-    .filter((b) => b.state === "overdue" || b.state === "underfunded" || (b.daysLeft !== null && b.daysLeft <= 14))
+    .filter(
+      (b) =>
+        b.state === "overdue" ||
+        b.state === "underfunded" ||
+        (b.daysLeft !== null && b.daysLeft <= 14),
+    )
     .sort((a, b) => (a.daysLeft ?? 0) - (b.daysLeft ?? 0));
 
   return (
@@ -88,13 +98,20 @@ export function EnvelopesDashboardCard({
                       <span
                         className={cn(
                           "rounded px-1 py-px text-2xs",
-                          range === "short" ? "bg-destructive/15 text-destructive" : "bg-warning/15 text-warning",
+                          range === "short"
+                            ? "bg-destructive/15 text-destructive"
+                            : "bg-warning/15 text-warning",
                         )}
                       >
                         {t(`spending:envelopes.${range}`)}
                       </span>
                     )}
-                    <span className={cn("tabular-nums", negative ? "text-destructive" : "text-foreground")}>
+                    <span
+                      className={cn(
+                        "tabular-nums",
+                        negative ? "text-destructive" : "text-foreground",
+                      )}
+                    >
                       <PrivacyAmount value={e.balance} currency={currency} />
                     </span>
                   </span>
@@ -113,16 +130,16 @@ export function EnvelopesDashboardCard({
               </div>
             );
           })}
-          <div className="text-muted-foreground flex items-center justify-between pt-1 text-2xs uppercase tracking-wide">
+          <div className="text-muted-foreground text-2xs flex items-center justify-between pt-1 tracking-wide uppercase">
             <span>{t("spending:envelopes.totalBalance")}</span>
-            <span className="text-foreground tabular-nums normal-case">
+            <span className="text-foreground normal-case tabular-nums">
               <PrivacyAmount value={data.totalBalance} currency={currency} />
             </span>
           </div>
         </div>
         {dueSoon.length > 0 && (
           <div className="px-4 py-3">
-            <div className="text-muted-foreground mb-1.5 text-2xs uppercase tracking-wide">
+            <div className="text-muted-foreground text-2xs mb-1.5 tracking-wide uppercase">
               {t("spending:envelopes.dueSoon")}
             </div>
             <div className="space-y-1">
@@ -151,7 +168,12 @@ export function EnvelopesDashboardCard({
                           ? t("spending:envelopes.dueToday")
                           : t("spending:envelopes.dueIn", { count: b.daysLeft ?? 0 })}
                   </span>
-                  <span className={cn("w-20 shrink-0 text-end tabular-nums", b.state === "ready" ? "text-success" : "text-foreground")}>
+                  <span
+                    className={cn(
+                      "w-20 shrink-0 text-end tabular-nums",
+                      b.state === "ready" ? "text-success" : "text-foreground",
+                    )}
+                  >
                     <PrivacyAmount value={b.balance} currency={currency} />
                   </span>
                 </div>

@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 
 import { useSpendingSettings } from "../hooks/use-spending-settings";
 import { invalidateSpendingCaches } from "../lib/invalidation";
+import { LoadFailed } from "./load-failed";
 
 const CARD = "bg-card border-border/60 rounded-xl border shadow-sm";
 export const FX_PENDING_KEY = "spending_fx_pending";
@@ -25,7 +26,10 @@ export function useFxPending() {
     enabled: ids.length > 0,
     queryFn: async () => {
       // ponytail: one page of 500 recent rows, filtered client-side; a metadata filter server-side if it ever overflows.
-      const res = await searchActivities(0, 500, { accountIds: ids }, "", { id: "date", desc: true });
+      const res = await searchActivities(0, 500, { accountIds: ids }, "", {
+        id: "date",
+        desc: true,
+      });
       return res.data.filter((a) => a.metadata?.fxPending === true);
     },
   });
@@ -95,6 +99,7 @@ export function FxPendingCard({ currency }: { currency: string }) {
   const { t } = useTranslation();
   const pending = useFxPending();
   const rows = pending.data ?? [];
+  if (pending.isError) return <LoadFailed onRetry={() => void pending.refetch()} />;
   return (
     <section className={cn(CARD, "space-y-2 p-4")}>
       <div className="flex items-center justify-between">

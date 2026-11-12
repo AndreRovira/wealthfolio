@@ -37,7 +37,8 @@ export interface IncomePlan {
 /** Quincenas per basis. */
 export const BASIS_FACTOR: Record<PlanBasis, number> = { quincena: 1, monthly: 2, annual: 24 };
 
-export const round2 = (v: number) => Math.round(v * 100) / 100;
+/** Cents, halves away from zero on both sides (Math.round sends -0.005 to 0). */
+export const round2 = (v: number) => (Math.sign(v) * Math.round(Math.abs(v) * 100)) / 100;
 
 export interface PlanValue {
   /** Value in the line's own basis, as computed. */
@@ -103,17 +104,6 @@ function tokenize(src: string): Tok[] {
     }
   }
   return out;
-}
-
-/** Dotted names a formula refers to, for dependency ordering. */
-export function references(formula: string): string[] {
-  try {
-    return tokenize(formula)
-      .filter((t): t is { t: "id"; v: string } => t.t === "id" && t.v.includes("."))
-      .map((t) => t.v);
-  } catch {
-    return [];
-  }
 }
 
 function evaluate(src: string, lookup: (name: string) => number): number {

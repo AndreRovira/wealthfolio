@@ -32,6 +32,7 @@ import {
   PageHeader,
   PrivacyAmount,
   ResponsiveSelect,
+  useBalancePrivacy,
   Sheet,
   SheetContent,
   SheetHeader,
@@ -109,9 +110,7 @@ function potLabel(
 ) {
   const row = snapshot?.envelopes.find((e) => e.envelope.id === envelopeId);
   if (!row) return envelopeId;
-  const bill = billId
-    ? row.bills.find((b) => b.bill.id === billId)?.bill.name
-    : null;
+  const bill = billId ? row.bills.find((b) => b.bill.id === billId)?.bill.name : null;
   return bill ? `${row.envelope.name} · ${bill}` : row.envelope.name;
 }
 
@@ -125,10 +124,7 @@ export default function SpendingEnvelopesPage() {
     () => new Map((taxonomy.data?.categories ?? []).map((c) => [c.id, c])),
     [taxonomy.data?.categories],
   );
-  const [envelopeDialog, setEnvelopeDialog] = useState<{
-    open: boolean;
-    row?: EnvelopeBalance;
-  }>({
+  const [envelopeDialog, setEnvelopeDialog] = useState<{ open: boolean; row?: EnvelopeBalance }>({
     open: false,
   });
   const [rulesOpen, setRulesOpen] = useState(false);
@@ -150,19 +146,11 @@ export default function SpendingEnvelopesPage() {
         }}
         actions={
           <div className="flex flex-wrap items-center justify-end gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => navigate("/spending/budget")}
-            >
+            <Button variant="ghost" size="sm" onClick={() => navigate("/spending/budget")}>
               <Icons.FileText className="me-1.5 h-3.5 w-3.5" />
               {t("spending:plan.heading")}
             </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setRulesOpen(true)}
-            >
+            <Button variant="ghost" size="sm" onClick={() => setRulesOpen(true)}>
               <Icons.Refresh className="me-1.5 h-3.5 w-3.5" />
               {t("spending:envelopes.rules")}
             </Button>
@@ -189,9 +177,7 @@ export default function SpendingEnvelopesPage() {
             <Skeleton className="h-16 w-full" />
           </div>
         )}
-        {snapshot.isError && (
-          <LoadFailed onRetry={() => void snapshot.refetch()} />
-        )}
+        {snapshot.isError && <LoadFailed onRetry={() => void snapshot.refetch()} />}
         {(snapshot.data?.quality.missingFxTransactions ?? 0) > 0 && (
           <p className="text-destructive text-sm" role="alert">
             {t("spending:envelopes.missingFx", {
@@ -200,19 +186,12 @@ export default function SpendingEnvelopesPage() {
             })}
           </p>
         )}
-        {data && data.pendingIncome.length > 0 && (
-          <PendingIncomeSection snapshot={data} />
-        )}
+        {data && data.pendingIncome.length > 0 && <PendingIncomeSection snapshot={data} />}
         {data && (
           <>
             <TotalsStrip snapshot={data} />
             {data.envelopes.length === 0 ? (
-              <div
-                className={cn(
-                  CARD,
-                  "text-muted-foreground p-6 text-center text-sm",
-                )}
-              >
+              <div className={cn(CARD, "text-muted-foreground p-6 text-center text-sm")}>
                 {t("spending:envelopes.empty")}
               </div>
             ) : (
@@ -239,14 +218,8 @@ export default function SpendingEnvelopesPage() {
           onOpenChange={(open) => setEnvelopeDialog((s) => ({ ...s, open }))}
         />
       )}
-      {moveOpen && (
-        <MoveDialog open onOpenChange={setMoveOpen} snapshot={data} />
-      )}
-      <RulesSheet
-        open={rulesOpen}
-        onOpenChange={setRulesOpen}
-        snapshot={data}
-      />
+      {moveOpen && <MoveDialog open onOpenChange={setMoveOpen} snapshot={data} />}
+      <RulesSheet open={rulesOpen} onOpenChange={setRulesOpen} snapshot={data} />
     </Page>
   );
 }
@@ -259,9 +232,7 @@ function TotalsStrip({ snapshot }: { snapshot: EnvelopeSnapshot }) {
   const spent = snapshot.envelopes.reduce((s, e) => s + e.spentThisMonth, 0);
   const cell = (label: string, value: number, strong?: boolean) => (
     <div className="min-w-0">
-      <div className="text-muted-foreground text-2xs uppercase tracking-wide">
-        {label}
-      </div>
+      <div className="text-muted-foreground text-2xs tracking-wide uppercase">{label}</div>
       <div
         className={cn(
           "truncate text-sm tabular-nums",
@@ -298,10 +269,7 @@ function EnvelopeCard({
   const { t } = useTranslation();
   const m = useEnvelopeMutations();
   const [open, setOpen] = useState(true);
-  const [entryOpen, setEntryOpen] = useState<{
-    open: boolean;
-    billId?: string | null;
-  }>({
+  const [entryOpen, setEntryOpen] = useState<{ open: boolean; billId?: string | null }>({
     open: false,
   });
   const [billDialog, setBillDialog] = useState<{
@@ -316,44 +284,25 @@ function EnvelopeCard({
   const currency = snapshot.currency;
   const negative = row.balance < 0;
   const envelopeIcon =
-    row.linkedCategoryIds
-      .map((id) => categoryMeta.get(id)?.icon)
-      .find(Boolean) ?? null;
+    row.linkedCategoryIds.map((id) => categoryMeta.get(id)?.icon).find(Boolean) ?? null;
   const target = row.periodTarget;
   const periodOut = row.spentThisPeriod;
   const periodPct = target > 0 ? Math.min(1, periodOut / target) : 0;
   // ponytail: fixed 1.5 quincenas as the "carrying too much" line; make it a setting if it nags.
   const range: "short" | "surplus" | null =
-    target <= 0
-      ? null
-      : row.balance < 0
-        ? "short"
-        : row.balance > target * 1.5
-          ? "surplus"
-          : null;
-  const readyCount = row.bills.filter(
-    (b) => b.state === "ready" || b.state === "overdue",
-  ).length;
+    target <= 0 ? null : row.balance < 0 ? "short" : row.balance > target * 1.5 ? "surplus" : null;
+  const readyCount = row.bills.filter((b) => b.state === "ready" || b.state === "overdue").length;
   // What the envelope takes in a year: its bills over their cycles, or the
   // quincena amount its rule lines add up to.
   const annual =
     row.bills.length > 0
-      ? row.bills.reduce(
-          (s, b) => s + billShares(b.bill.expectedAmount, b.bill.cycle).annual,
-          0,
-        )
+      ? row.bills.reduce((s, b) => s + billShares(b.bill.expectedAmount, b.bill.cycle).annual, 0)
       : row.periodTarget * 24;
   // Labelled rule lines: what the envelope's quincena amount is made of.
   const components = snapshot.rules
     .filter((r) => r.active)
     .flatMap((r) => r.splits)
-    .filter(
-      (s) =>
-        s.envelopeId === row.envelope.id &&
-        !s.billId &&
-        s.label &&
-        s.amount != null,
-    );
+    .filter((s) => s.envelopeId === row.envelope.id && !s.billId && s.label && s.amount != null);
 
   // Quincena progress, annual total and links. Beside the name on wide screens,
   // on its own row on a phone, where the name column is too narrow to hold it.
@@ -366,14 +315,12 @@ function EnvelopeCard({
               className="block h-full rounded-full"
               style={{
                 width: `${periodPct * 100}%`,
-                backgroundColor:
-                  periodOut > target ? "var(--destructive)" : accent,
+                backgroundColor: periodOut > target ? "var(--destructive)" : accent,
               }}
             />
           </span>
           {t("spending:envelopes.thisPeriod")}:{" "}
-          <PrivacyAmount value={periodOut} currency={currency} />{" "}
-          {t("spending:envelopes.of")}{" "}
+          <PrivacyAmount value={periodOut} currency={currency} /> {t("spending:envelopes.of")}{" "}
           <PrivacyAmount value={target} currency={currency} />
         </>
       ) : (
@@ -388,10 +335,8 @@ function EnvelopeCard({
       {range && (
         <span
           className={cn(
-            "rounded px-1 py-px",
-            range === "short"
-              ? "bg-destructive/15 text-destructive"
-              : "bg-warning/15 text-warning",
+            "ms-1 rounded px-1 py-px",
+            range === "short" ? "bg-destructive/15 text-destructive" : "bg-warning/15 text-warning",
           )}
         >
           {t(`spending:envelopes.${range}`)}
@@ -400,18 +345,11 @@ function EnvelopeCard({
       {annual !== 0 && (
         <>
           {" "}
-          · {t("spending:plan.colAnnual")}{" "}
-          <PrivacyAmount value={annual} currency={currency} />
+          · {t("spending:plan.colAnnual")} <PrivacyAmount value={annual} currency={currency} />
         </>
       )}
       {row.linkedCategoryIds.length > 0 && (
-        <>
-          {" "}
-          ·{" "}
-          {t("spending:envelopes.linkedCount", {
-            count: row.linkedCategoryIds.length,
-          })}
-        </>
+        <> · {t("spending:envelopes.linkedCount", { count: row.linkedCategoryIds.length })}</>
       )}
       {readyCount > 0 && (
         <span className="text-success">
@@ -433,39 +371,26 @@ function EnvelopeCard({
           aria-label={row.envelope.name}
         >
           <Icons.ChevronRight
-            className={cn(
-              "h-3.5 w-3.5 transition-transform",
-              open && "rotate-90",
-            )}
+            className={cn("h-3.5 w-3.5 transition-transform", open && "rotate-90")}
           />
         </button>
         <span
           className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md"
           style={{ backgroundColor: tint(accent, 0.12), color: accent }}
         >
-          <CategoryIcon
-            icon={row.envelope.icon ?? envelopeIcon}
-            className="h-3.5 w-3.5"
-          />
+          <CategoryIcon icon={row.envelope.icon ?? envelopeIcon} className="h-3.5 w-3.5" />
         </span>
         <div className="min-w-0 flex-1">
-          <div className="text-foreground truncate text-sm font-semibold">
-            {row.envelope.name}
-          </div>
+          <div className="text-foreground truncate text-sm font-semibold">{row.envelope.name}</div>
           <div className="text-muted-foreground text-2xs hidden items-center gap-1.5 truncate tabular-nums sm:flex">
             {meta}
           </div>
         </div>
         <div className="text-end">
-          <div
-            className={cn(
-              "text-sm font-semibold tabular-nums",
-              negative && "text-destructive",
-            )}
-          >
+          <div className={cn("text-sm font-semibold tabular-nums", negative && "text-destructive")}>
             <PrivacyAmount value={row.balance} currency={currency} />
           </div>
-          <div className="text-muted-foreground text-2xs uppercase tracking-wide">
+          <div className="text-muted-foreground text-2xs tracking-wide uppercase">
             {t("spending:envelopes.balance")}
           </div>
         </div>
@@ -483,31 +408,19 @@ function EnvelopeCard({
             <Icons.MoreVertical className="h-4 w-4" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-52">
-            <DropdownMenuItem
-              className="text-xs"
-              onClick={() => setEntryOpen({ open: true })}
-            >
+            <DropdownMenuItem className="text-xs" onClick={() => setEntryOpen({ open: true })}>
               <Icons.Plus className="me-2 h-3.5 w-3.5" />
               {t("spending:envelopes.fundOrAdjust")}
             </DropdownMenuItem>
-            <DropdownMenuItem
-              className="text-xs"
-              onClick={() => setBillDialog({ open: true })}
-            >
+            <DropdownMenuItem className="text-xs" onClick={() => setBillDialog({ open: true })}>
               <Icons.Receipt className="me-2 h-3.5 w-3.5" />
               {t("spending:envelopes.addBill")}
             </DropdownMenuItem>
-            <DropdownMenuItem
-              className="text-xs"
-              onClick={() => setLinksOpen(true)}
-            >
+            <DropdownMenuItem className="text-xs" onClick={() => setLinksOpen(true)}>
               <Icons.Link className="me-2 h-3.5 w-3.5" />
               {t("spending:envelopes.linkCategories")}
             </DropdownMenuItem>
-            <DropdownMenuItem
-              className="text-xs"
-              onClick={() => setHistoryOpen(true)}
-            >
+            <DropdownMenuItem className="text-xs" onClick={() => setHistoryOpen(true)}>
               <Icons.History className="me-2 h-3.5 w-3.5" />
               {t("spending:envelopes.history")}
             </DropdownMenuItem>
@@ -533,8 +446,7 @@ function EnvelopeCard({
               className="block h-full rounded-full"
               style={{
                 width: `${periodPct * 100}%`,
-                backgroundColor:
-                  periodOut > target ? "var(--destructive)" : accent,
+                backgroundColor: periodOut > target ? "var(--destructive)" : accent,
               }}
             />
           </span>
@@ -544,52 +456,37 @@ function EnvelopeCard({
 
       {open && components.length > 0 && (
         <div className="border-border/60 divide-border/40 divide-y border-t">
-          <div className="text-muted-foreground hidden items-center gap-3 px-4 py-1 text-2xs uppercase tracking-wide sm:flex">
+          <div className="text-muted-foreground text-2xs hidden items-center gap-3 px-4 py-1 tracking-wide uppercase sm:flex">
             <span className="w-5 shrink-0" aria-hidden />
             <span className="flex-1" />
-            <span className="w-24 shrink-0 text-end">
-              {t("spending:plan.colAnnual")}
-            </span>
-            <span className="w-24 shrink-0 text-end">
-              {t("spending:plan.colQuincena")}
-            </span>
+            <span className="w-24 shrink-0 text-end">{t("spending:plan.colAnnual")}</span>
+            <span className="w-24 shrink-0 text-end">{t("spending:plan.colQuincena")}</span>
             <span className="w-6 shrink-0" aria-hidden />
           </div>
           {components.map((c, i) => (
-            <div
-              key={i}
-              className="flex items-center gap-2 px-3 py-1.5 text-xs sm:gap-3 sm:px-4"
-            >
+            <div key={i} className="flex items-center gap-2 px-3 py-1.5 text-xs sm:gap-3 sm:px-4">
               <span className="h-5 w-5 shrink-0" aria-hidden />
               <span className="min-w-0 flex-1">
                 <span className="text-foreground block truncate">
                   {c.label}
                   {c.source && (
-                    <span className="bg-muted text-muted-foreground ms-1.5 rounded px-1 py-px font-mono text-2xs">
+                    <span className="bg-muted text-muted-foreground text-2xs ms-1.5 rounded px-1 py-px font-mono">
                       ={c.source}
                     </span>
                   )}
                 </span>
-                <span className="text-muted-foreground block text-2xs tabular-nums sm:hidden">
+                <span className="text-muted-foreground text-2xs block tabular-nums sm:hidden">
                   {t("spending:plan.colAnnual")}{" "}
-                  <PrivacyAmount
-                    value={(c.amount ?? 0) * 24}
-                    currency={currency}
-                  />
+                  <PrivacyAmount value={(c.amount ?? 0) * 24} currency={currency} />
                 </span>
               </span>
               <span className="text-muted-foreground hidden w-24 shrink-0 text-end tabular-nums sm:inline">
-                <PrivacyAmount
-                  value={(c.amount ?? 0) * 24}
-                  currency={currency}
-                />
+                <PrivacyAmount value={(c.amount ?? 0) * 24} currency={currency} />
               </span>
               <span
                 className={cn(
                   "w-24 shrink-0 text-end tabular-nums",
-                  (c.amount ?? 0) < 0
-                    ? "text-muted-foreground"
-                    : "text-foreground",
+                  (c.amount ?? 0) < 0 ? "text-muted-foreground" : "text-foreground",
                 )}
               >
                 <PrivacyAmount value={c.amount ?? 0} currency={currency} />
@@ -602,29 +499,20 @@ function EnvelopeCard({
 
       {open && row.bills.length > 0 && (
         <div className="border-border/60 divide-border/40 divide-y border-t">
-          <div className="text-muted-foreground hidden items-center gap-3 px-4 py-1 text-2xs uppercase tracking-wide sm:flex">
+          <div className="text-muted-foreground text-2xs hidden items-center gap-3 px-4 py-1 tracking-wide uppercase sm:flex">
             <span className="w-5 shrink-0" aria-hidden />
             <span className="flex-1" />
             <span className="hidden w-24 shrink-0 text-end lg:inline">
               {t("spending:plan.colLastPaid")}
             </span>
             <span className="w-20 shrink-0" aria-hidden />
-            <span className="w-24 shrink-0 text-end">
-              {t("spending:envelopes.expectedAmount")}
-            </span>
-            <span className="w-24 shrink-0 text-end">
-              {t("spending:plan.colAnnual")}
-            </span>
-            <span className="w-24 shrink-0 text-end">
-              {t("spending:envelopes.balance")}
-            </span>
+            <span className="w-24 shrink-0 text-end">{t("spending:envelopes.expectedAmount")}</span>
+            <span className="w-24 shrink-0 text-end">{t("spending:plan.colAnnual")}</span>
+            <span className="w-24 shrink-0 text-end">{t("spending:envelopes.balance")}</span>
             <span className="w-6 shrink-0" aria-hidden />
           </div>
           {row.bills.map((b) => {
-            const billAnnual = billShares(
-              b.bill.expectedAmount,
-              b.bill.cycle,
-            ).annual;
+            const billAnnual = billShares(b.bill.expectedAmount, b.bill.cycle).annual;
             const paid = billLastPaid(b);
             const ready = b.state === "ready" || b.state === "overdue";
             const past = b.state === "overdue" || b.state === "underfunded";
@@ -632,9 +520,7 @@ function EnvelopeCard({
               b.bill.expectedAmount > 0
                 ? Math.max(0, Math.min(1, b.balance / b.bill.expectedAmount))
                 : 0;
-            const icon = b.linkedCategoryIds
-              .map((id) => categoryMeta.get(id))
-              .find((c) => c?.icon);
+            const icon = b.linkedCategoryIds.map((id) => categoryMeta.get(id)).find((c) => c?.icon);
             return (
               <div
                 key={b.bill.id}
@@ -673,18 +559,16 @@ function EnvelopeCard({
                             ? t("spending:envelopes.underfunded")
                             : b.daysLeft === 0
                               ? t("spending:envelopes.dueToday")
-                              : t("spending:envelopes.dueIn", {
-                                  count: b.daysLeft,
-                                })}
+                              : t("spending:envelopes.dueIn", { count: b.daysLeft })}
                       </span>
                     )}
                     {b.state === "ready" && (
-                      <span className="bg-success/15 text-success ms-1.5 rounded px-1 py-px text-2xs">
+                      <span className="bg-success/15 text-success text-2xs ms-1.5 rounded px-1 py-px">
                         {t("spending:envelopes.ready")}
                       </span>
                     )}
                   </span>
-                  <span className="text-muted-foreground block text-2xs tabular-nums lg:hidden">
+                  <span className="text-muted-foreground text-2xs block tabular-nums lg:hidden">
                     <span className="sm:hidden">
                       {t("spending:plan.colAnnual")}{" "}
                       <PrivacyAmount value={billAnnual} currency={currency} />
@@ -729,24 +613,17 @@ function EnvelopeCard({
                             : ready
                               ? "var(--success)"
                               : accent,
-                        boxShadow:
-                          ready && !past ? "0 0 6px var(--success)" : undefined,
+                        boxShadow: ready && !past ? "0 0 6px var(--success)" : undefined,
                       }}
                     />
                   </TooltipTrigger>
                   <TooltipContent side="top" sideOffset={4} className="text-xs">
                     <PrivacyAmount value={b.balance} currency={currency} /> /{" "}
-                    <PrivacyAmount
-                      value={b.bill.expectedAmount}
-                      currency={currency}
-                    />
+                    <PrivacyAmount value={b.bill.expectedAmount} currency={currency} />
                   </TooltipContent>
                 </Tooltip>
                 <span className="text-muted-foreground hidden w-24 shrink-0 text-end tabular-nums sm:inline">
-                  <PrivacyAmount
-                    value={b.bill.expectedAmount}
-                    currency={currency}
-                  />
+                  <PrivacyAmount value={b.bill.expectedAmount} currency={currency} />
                 </span>
                 <span className="text-muted-foreground hidden w-24 shrink-0 text-end tabular-nums sm:inline">
                   <PrivacyAmount value={billAnnual} currency={currency} />
@@ -779,9 +656,7 @@ function EnvelopeCard({
                   <DropdownMenuContent align="end" className="w-48">
                     <DropdownMenuItem
                       className="text-xs"
-                      onClick={() =>
-                        setEntryOpen({ open: true, billId: b.bill.id })
-                      }
+                      onClick={() => setEntryOpen({ open: true, billId: b.bill.id })}
                     >
                       <Icons.Plus className="me-2 h-3.5 w-3.5" />
                       {t("spending:envelopes.fundOrAdjust")}
@@ -796,9 +671,7 @@ function EnvelopeCard({
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       className="text-xs"
-                      onClick={() =>
-                        setBillDialog({ open: true, bill: b.bill })
-                      }
+                      onClick={() => setBillDialog({ open: true, bill: b.bill })}
                     >
                       <Icons.Pencil className="me-2 h-3.5 w-3.5" />
                       {t("common:edit")}
@@ -806,10 +679,7 @@ function EnvelopeCard({
                     <DropdownMenuItem
                       className="text-destructive focus:text-destructive text-xs"
                       onClick={() =>
-                        setDoomed({
-                          name: b.bill.name,
-                          run: () => m.deleteBill.mutate(b.bill.id),
-                        })
+                        setDoomed({ name: b.bill.name, run: () => m.deleteBill.mutate(b.bill.id) })
                       }
                     >
                       <Icons.Trash className="me-2 h-3.5 w-3.5" />
@@ -841,12 +711,7 @@ function EnvelopeCard({
       )}
       {linksOpen && <LinksDialog open onOpenChange={setLinksOpen} row={row} />}
       {historyOpen && (
-        <HistorySheet
-          open
-          onOpenChange={setHistoryOpen}
-          row={row}
-          snapshot={snapshot}
-        />
+        <HistorySheet open onOpenChange={setHistoryOpen} row={row} snapshot={snapshot} />
       )}
       <ConfirmDelete doomed={doomed} onClose={() => setDoomed(null)} />
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
@@ -855,15 +720,11 @@ function EnvelopeCard({
             <AlertDialogTitle>
               {t("spending:envelopes.deleteTitle", { name: row.envelope.name })}
             </AlertDialogTitle>
-            <AlertDialogDescription>
-              {t("spending:envelopes.deleteDesc")}
-            </AlertDialogDescription>
+            <AlertDialogDescription>{t("spending:envelopes.deleteDesc")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{t("common:cancel")}</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => m.deleteEnvelope.mutate(row.envelope.id)}
-            >
+            <AlertDialogAction onClick={() => m.deleteEnvelope.mutate(row.envelope.id)}>
               {t("common:delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -890,13 +751,7 @@ interface Doomed {
 }
 
 /** Asks before a delete; nothing here can be undone. */
-function ConfirmDelete({
-  doomed,
-  onClose,
-}: {
-  doomed: Doomed | null;
-  onClose: () => void;
-}) {
+function ConfirmDelete({ doomed, onClose }: { doomed: Doomed | null; onClose: () => void }) {
   const { t } = useTranslation();
   return (
     <AlertDialog open={doomed !== null} onOpenChange={(o) => !o && onClose()}>
@@ -908,9 +763,7 @@ function ConfirmDelete({
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>{t("common:cancel")}</AlertDialogCancel>
-          <AlertDialogAction onClick={() => doomed?.run()}>
-            {t("common:delete")}
-          </AlertDialogAction>
+          <AlertDialogAction onClick={() => doomed?.run()}>{t("common:delete")}</AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
@@ -966,18 +819,12 @@ function EnvelopeDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {e
-              ? t("spending:envelopes.editEnvelope")
-              : t("spending:envelopes.newEnvelope")}
+            {e ? t("spending:envelopes.editEnvelope") : t("spending:envelopes.newEnvelope")}
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
           <Field label={t("spending:envelopes.name")}>
-            <Input
-              value={name}
-              onChange={(ev) => setName(ev.target.value)}
-              autoFocus
-            />
+            <Input value={name} onChange={(ev) => setName(ev.target.value)} autoFocus />
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label={t("spending:envelopes.color")}>
@@ -1009,17 +856,12 @@ function EnvelopeDialog({
           )}
           <label className="flex items-center justify-between gap-3 text-xs">
             <span>
-              <span className="text-foreground block">
-                {t("spending:envelopes.allowNegative")}
-              </span>
+              <span className="text-foreground block">{t("spending:envelopes.allowNegative")}</span>
               <span className="text-muted-foreground">
                 {t("spending:envelopes.allowNegativeDesc")}
               </span>
             </span>
-            <Switch
-              checked={allowNegative}
-              onCheckedChange={setAllowNegative}
-            />
+            <Switch checked={allowNegative} onCheckedChange={setAllowNegative} />
           </label>
         </div>
         <DialogFooter>
@@ -1088,18 +930,12 @@ function BillDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {bill
-              ? t("spending:envelopes.editBill")
-              : t("spending:envelopes.addBill")}
+            {bill ? t("spending:envelopes.editBill") : t("spending:envelopes.addBill")}
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
           <Field label={t("spending:envelopes.name")}>
-            <Input
-              value={name}
-              onChange={(ev) => setName(ev.target.value)}
-              autoFocus
-            />
+            <Input value={name} onChange={(ev) => setName(ev.target.value)} autoFocus />
           </Field>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <Field label={t("spending:envelopes.expectedAmount")}>
@@ -1111,11 +947,7 @@ function BillDialog({
               />
             </Field>
             <Field label={t("spending:envelopes.nextDue")}>
-              <Input
-                type="date"
-                value={nextDue}
-                onChange={(ev) => setNextDue(ev.target.value)}
-              />
+              <Input type="date" value={nextDue} onChange={(ev) => setNextDue(ev.target.value)} />
             </Field>
             <Field label={t("spending:envelopes.cycle")}>
               <ResponsiveSelect
@@ -1123,23 +955,11 @@ function BillDialog({
                 onValueChange={setCycle}
                 options={[
                   { value: "monthly", label: t("spending:envelopes.monthly") },
-                  {
-                    value: "2 months",
-                    label: t("spending:envelopes.everyMonths", { count: 2 }),
-                  },
-                  {
-                    value: "3 months",
-                    label: t("spending:envelopes.everyMonths", { count: 3 }),
-                  },
-                  {
-                    value: "6 months",
-                    label: t("spending:envelopes.everyMonths", { count: 6 }),
-                  },
+                  { value: "2 months", label: t("spending:envelopes.everyMonths", { count: 2 }) },
+                  { value: "3 months", label: t("spending:envelopes.everyMonths", { count: 3 }) },
+                  { value: "6 months", label: t("spending:envelopes.everyMonths", { count: 6 }) },
                   { value: "yearly", label: t("spending:envelopes.yearly") },
-                  {
-                    value: "24 months",
-                    label: t("spending:envelopes.everyMonths", { count: 24 }),
-                  },
+                  { value: "24 months", label: t("spending:envelopes.everyMonths", { count: 24 }) },
                 ]}
               />
             </Field>
@@ -1229,11 +1049,7 @@ function EntryDialog({
               />
             </Field>
             <Field label={t("spending:envelopes.date")}>
-              <Input
-                type="date"
-                value={date}
-                onChange={(ev) => setDate(ev.target.value)}
-              />
+              <Input type="date" value={date} onChange={(ev) => setDate(ev.target.value)} />
             </Field>
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -1242,14 +1058,8 @@ function EntryDialog({
                 value={kind}
                 onValueChange={(v) => setKind(v as "funding" | "adjustment")}
                 options={[
-                  {
-                    value: "funding",
-                    label: t("spending:envelopes.kindFunding"),
-                  },
-                  {
-                    value: "adjustment",
-                    label: t("spending:envelopes.kindAdjustment"),
-                  },
+                  { value: "funding", label: t("spending:envelopes.kindFunding") },
+                  { value: "adjustment", label: t("spending:envelopes.kindAdjustment") },
                 ]}
               />
             </Field>
@@ -1259,10 +1069,7 @@ function EntryDialog({
                 onValueChange={setTarget}
                 options={[
                   { value: "", label: t("spending:envelopes.envelopeItself") },
-                  ...row.bills.map((b) => ({
-                    value: b.bill.id,
-                    label: b.bill.name,
-                  })),
+                  ...row.bills.map((b) => ({ value: b.bill.id, label: b.bill.name })),
                 ]}
               />
             </Field>
@@ -1270,18 +1077,13 @@ function EntryDialog({
           <Field label={t("spending:envelopes.note")}>
             <Input value={note} onChange={(ev) => setNote(ev.target.value)} />
           </Field>
-          <p className="text-muted-foreground text-2xs">
-            {t("spending:envelopes.entryHint")}
-          </p>
+          <p className="text-muted-foreground text-2xs">{t("spending:envelopes.entryHint")}</p>
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             {t("common:cancel")}
           </Button>
-          <Button
-            onClick={() => void save()}
-            disabled={num(amount) === 0 || m.busy}
-          >
+          <Button onClick={() => void save()} disabled={num(amount) === 0 || m.busy}>
             {t("common:save")}
           </Button>
         </DialogFooter>
@@ -1361,11 +1163,7 @@ function MoveDialog({
               />
             </Field>
             <Field label={t("spending:envelopes.date")}>
-              <Input
-                type="date"
-                value={date}
-                onChange={(ev) => setDate(ev.target.value)}
-              />
+              <Input type="date" value={date} onChange={(ev) => setDate(ev.target.value)} />
             </Field>
           </div>
           <Field label={t("spending:envelopes.note")}>
@@ -1431,9 +1229,7 @@ function LinksDialog({
   const initial = useMemo(() => {
     const map = new Map<string, string>();
     row.linkedCategoryIds.forEach((id) => map.set(id, ""));
-    row.bills.forEach((b) =>
-      b.linkedCategoryIds.forEach((id) => map.set(id, b.bill.id)),
-    );
+    row.bills.forEach((b) => b.linkedCategoryIds.forEach((id) => map.set(id, b.bill.id)));
     return map;
   }, [row]);
   const [links, setLinks] = useState<Map<string, string>>(initial);
@@ -1444,13 +1240,11 @@ function LinksDialog({
   }
 
   const save = async () => {
-    const out: EnvelopeCategoryLink[] = [...links.entries()].map(
-      ([categoryId, billId]) => ({
-        categoryId,
-        envelopeId: row.envelope.id,
-        billId: billId || null,
-      }),
-    );
+    const out: EnvelopeCategoryLink[] = [...links.entries()].map(([categoryId, billId]) => ({
+      categoryId,
+      envelopeId: row.envelope.id,
+      billId: billId || null,
+    }));
     await m.replaceLinks.mutateAsync({ id: row.envelope.id, links: out });
     onOpenChange(false);
   };
@@ -1463,9 +1257,7 @@ function LinksDialog({
             {t("spending:envelopes.linkCategories")} · {row.envelope.name}
           </DialogTitle>
         </DialogHeader>
-        <p className="text-muted-foreground text-xs">
-          {t("spending:envelopes.linkHint")}
-        </p>
+        <p className="text-muted-foreground text-xs">{t("spending:envelopes.linkHint")}</p>
         <div className="max-h-[60vh] space-y-1 overflow-y-auto pe-1">
           {categories.map(({ category, depth }) => {
             const checked = links.has(category.id);
@@ -1487,27 +1279,16 @@ function LinksDialog({
                   }
                   id={`link-${category.id}`}
                 />
-                <label
-                  htmlFor={`link-${category.id}`}
-                  className="min-w-0 flex-1 truncate"
-                >
+                <label htmlFor={`link-${category.id}`} className="min-w-0 flex-1 truncate">
                   {category.name}
                 </label>
                 {checked && row.bills.length > 0 && (
                   <ResponsiveSelect
                     value={links.get(category.id) ?? ""}
-                    onValueChange={(v) =>
-                      setLinks((prev) => new Map(prev).set(category.id, v))
-                    }
+                    onValueChange={(v) => setLinks((prev) => new Map(prev).set(category.id, v))}
                     options={[
-                      {
-                        value: "",
-                        label: t("spending:envelopes.envelopeItself"),
-                      },
-                      ...row.bills.map((b) => ({
-                        value: b.bill.id,
-                        label: b.bill.name,
-                      })),
+                      { value: "", label: t("spending:envelopes.envelopeItself") },
+                      ...row.bills.map((b) => ({ value: b.bill.id, label: b.bill.name })),
                     ]}
                     triggerClassName="h-7 w-40 text-xs"
                   />
@@ -1546,14 +1327,10 @@ function HistorySheet({
   const m = useEnvelopeMutations();
   const entries = useEnvelopeEntries(open ? row.envelope.id : null);
   const [doomed, setDoomed] = useState<Doomed | null>(null);
-  const billName = (id: string | null) =>
-    row.bills.find((b) => b.bill.id === id)?.bill.name;
+  const billName = (id: string | null) => row.bills.find((b) => b.bill.id === id)?.bill.name;
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        side="inline-end"
-        className="flex w-full flex-col sm:max-w-lg"
-      >
+      <SheetContent side="inline-end" className="flex w-full flex-col sm:max-w-lg">
         <SheetHeader>
           <SheetTitle>
             {t("spending:envelopes.history")} · {row.envelope.name}
@@ -1575,12 +1352,7 @@ function HistorySheet({
                   {t(`spending:envelopes.kind_${e.kind}`)}
                 </Badge>
                 {e.note}
-                {e.billId && (
-                  <span className="text-muted-foreground">
-                    {" "}
-                    · {billName(e.billId)}
-                  </span>
-                )}
+                {e.billId && <span className="text-muted-foreground"> · {billName(e.billId)}</span>}
               </span>
               <span
                 className={cn(
@@ -1619,7 +1391,7 @@ function PendingIncomeSection({ snapshot }: { snapshot: EnvelopeSnapshot }) {
   const { t } = useTranslation();
   return (
     <div className="space-y-2">
-      <h3 className="text-muted-foreground text-2xs font-semibold uppercase tracking-wide">
+      <h3 className="text-muted-foreground text-2xs font-semibold tracking-wide uppercase">
         {t("spending:envelopes.pendingIncome")}
       </h3>
       {snapshot.pendingIncome.map((p) => (
@@ -1642,9 +1414,7 @@ function PendingIncomeCard({
 }) {
   const { t } = useTranslation();
   const m = useEnvelopeMutations();
-  const [amounts, setAmounts] = useState(
-    item.proposed.map((p) => String(p.amount)),
-  );
+  const [amounts, setAmounts] = useState(item.proposed.map((p) => String(p.amount)));
   const total = amounts.reduce((s, a) => s + num(a), 0);
   const apply = () =>
     m.applyIncome.mutate({
@@ -1678,9 +1448,7 @@ function PendingIncomeCard({
               step="0.01"
               value={amounts[i]}
               onChange={(ev) =>
-                setAmounts((prev) =>
-                  prev.map((a, j) => (j === i ? ev.target.value : a)),
-                )
+                setAmounts((prev) => prev.map((a, j) => (j === i ? ev.target.value : a)))
               }
               className="h-7 w-32 text-end text-xs tabular-nums"
             />
@@ -1717,10 +1485,9 @@ function RulesSheet({
   snapshot: EnvelopeSnapshot | undefined;
 }) {
   const { t } = useTranslation();
+  const { isBalanceHidden } = useBalancePrivacy();
   const m = useEnvelopeMutations();
-  const [editing, setEditing] = useState<{ open: boolean; rule?: FundingRule }>(
-    { open: false },
-  );
+  const [editing, setEditing] = useState<{ open: boolean; rule?: FundingRule }>({ open: false });
   const [doomed, setDoomed] = useState<Doomed | null>(null);
   const cadenceLabel: Record<FundingCadence, string> = {
     biweekly: t("spending:envelopes.cadenceBiweekly"),
@@ -1730,22 +1497,14 @@ function RulesSheet({
   };
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        side="inline-end"
-        className="flex w-full flex-col sm:max-w-lg"
-      >
+      <SheetContent side="inline-end" className="flex w-full flex-col sm:max-w-lg">
         <SheetHeader>
           <SheetTitle>{t("spending:envelopes.rules")}</SheetTitle>
         </SheetHeader>
-        <p className="text-muted-foreground text-xs">
-          {t("spending:envelopes.rulesHint")}
-        </p>
+        <p className="text-muted-foreground text-xs">{t("spending:envelopes.rulesHint")}</p>
         <div className="flex-1 space-y-2 overflow-y-auto">
           {snapshot?.rules.map((r) => (
-            <div
-              key={r.id}
-              className={cn(CARD, "flex items-center gap-2 px-3 py-2 text-xs")}
-            >
+            <div key={r.id} className={cn(CARD, "flex items-center gap-2 px-3 py-2 text-xs")}>
               <div className="min-w-0 flex-1">
                 <div className="truncate font-semibold">
                   {r.name}
@@ -1767,7 +1526,7 @@ function RulesSheet({
                   {r.splits
                     .map(
                       (s) =>
-                        `${s.label ?? potLabel(snapshot, s.envelopeId, s.billId ?? null)} ${s.amount != null ? s.amount : `${s.percent ?? 0}%`}`,
+                        `${s.label ?? potLabel(snapshot, s.envelopeId, s.billId ?? null)} ${s.amount == null ? `${s.percent ?? 0}%` : isBalanceHidden ? "••••" : s.amount}`,
                     )
                     .join(", ")}
                 </div>
@@ -1786,12 +1545,7 @@ function RulesSheet({
                 size="sm"
                 className="text-destructive h-7 w-7 p-0"
                 aria-label={t("common:delete")}
-                onClick={() =>
-                  setDoomed({
-                    name: r.name,
-                    run: () => m.deleteRule.mutate(r.id),
-                  })
-                }
+                onClick={() => setDoomed({ name: r.name, run: () => m.deleteRule.mutate(r.id) })}
               >
                 <Icons.Trash className="h-3.5 w-3.5" />
               </Button>
@@ -1833,9 +1587,7 @@ function RuleDialog({
   const pots = useMemo(() => potOptions(snapshot), [snapshot]);
   const [name, setName] = useState(rule?.name ?? "");
   const [anchor, setAnchor] = useState(rule?.anchorDate ?? today());
-  const [incomeCategory, setIncomeCategory] = useState(
-    rule?.incomeCategoryId ?? "",
-  );
+  const [incomeCategory, setIncomeCategory] = useState(rule?.incomeCategoryId ?? "");
   const [shortfall, setShortfall] = useState(rule?.shortfallEnvelopeId ?? "");
   const [active, setActive] = useState(rule?.active ?? true);
   const [splits, setSplits] = useState<FundingSplit[]>(rule?.splits ?? []);
@@ -1875,26 +1627,16 @@ function RuleDialog({
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>
-            {rule
-              ? t("spending:envelopes.editRule")
-              : t("spending:envelopes.newRule")}
+            {rule ? t("spending:envelopes.editRule") : t("spending:envelopes.newRule")}
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <Field label={t("spending:envelopes.name")}>
-              <Input
-                value={name}
-                onChange={(ev) => setName(ev.target.value)}
-                autoFocus
-              />
+              <Input value={name} onChange={(ev) => setName(ev.target.value)} autoFocus />
             </Field>
             <Field label={t("spending:envelopes.since")}>
-              <Input
-                type="date"
-                value={anchor}
-                onChange={(ev) => setAnchor(ev.target.value)}
-              />
+              <Input type="date" value={anchor} onChange={(ev) => setAnchor(ev.target.value)} />
             </Field>
             <Field label={t("spending:envelopes.incomeCategory")}>
               <ResponsiveSelect
@@ -1922,8 +1664,7 @@ function RuleDialog({
           <div className="space-y-1.5">
             <Label className="text-xs">{t("spending:envelopes.splits")}</Label>
             <p className="text-muted-foreground text-2xs">
-              {t("spending:envelopes.splitHintIncome")}{" "}
-              {t("spending:envelopes.splitHintSource")}
+              {t("spending:envelopes.splitHintIncome")} {t("spending:envelopes.splitHintSource")}
             </p>
             {splits.map((s, i) => (
               <div key={i} className="flex flex-wrap items-center gap-2">
@@ -1956,10 +1697,7 @@ function RuleDialog({
                       i,
                       s.source != null
                         ? { source: null }
-                        : {
-                            source: s.billId ? SOURCE_BILL : "",
-                            percent: null,
-                          },
+                        : { source: s.billId ? SOURCE_BILL : "", percent: null },
                     )
                   }
                 >
@@ -1971,9 +1709,7 @@ function RuleDialog({
                       className="h-8 w-28 font-mono text-xs"
                       placeholder={t("spending:envelopes.sourcePlaceholder")}
                       value={s.source}
-                      onChange={(ev) =>
-                        setSplit(i, { source: ev.target.value })
-                      }
+                      onChange={(ev) => setSplit(i, { source: ev.target.value })}
                     />
                     <span className="text-muted-foreground w-20 truncate text-end text-xs tabular-nums">
                       {s.amount ?? ""}
@@ -1989,10 +1725,7 @@ function RuleDialog({
                       value={s.amount ?? ""}
                       onChange={(ev) =>
                         setSplit(i, {
-                          amount:
-                            ev.target.value === ""
-                              ? null
-                              : Number(ev.target.value),
+                          amount: ev.target.value === "" ? null : Number(ev.target.value),
                           percent: null,
                         })
                       }
@@ -2005,10 +1738,7 @@ function RuleDialog({
                       value={s.percent ?? ""}
                       onChange={(ev) =>
                         setSplit(i, {
-                          percent:
-                            ev.target.value === ""
-                              ? null
-                              : Number(ev.target.value),
+                          percent: ev.target.value === "" ? null : Number(ev.target.value),
                           amount: null,
                         })
                       }
@@ -2020,9 +1750,7 @@ function RuleDialog({
                   size="sm"
                   className="h-8 w-8 p-0"
                   aria-label={t("common:delete")}
-                  onClick={() =>
-                    setSplits((prev) => prev.filter((_, j) => j !== i))
-                  }
+                  onClick={() => setSplits((prev) => prev.filter((_, j) => j !== i))}
                 >
                   <Icons.X className="h-3.5 w-3.5" />
                 </Button>
@@ -2043,9 +1771,7 @@ function RuleDialog({
             </Button>
           </div>
           <label className="flex items-center justify-between gap-3 text-xs">
-            <span className="text-foreground">
-              {t("spending:envelopes.active")}
-            </span>
+            <span className="text-foreground">{t("spending:envelopes.active")}</span>
             <Switch checked={active} onCheckedChange={setActive} />
           </label>
         </div>

@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -16,8 +17,7 @@ import {
   ResponsiveSelect,
 } from "@wealthfolio/ui";
 
-import { profileFetch } from "@/features/profiles/session";
-import { notifyUnauthorized } from "@/lib/auth-token";
+import { request as send } from "@/features/spending/adapters/request";
 
 // Fork feature served only by the web host: talks to /api/v1 directly.
 interface Candidate {
@@ -30,32 +30,14 @@ interface Candidate {
   notes: string | null;
 }
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const res = await profileFetch(`/api/v1/spending/msi${path}`, {
-    method,
-    headers: body === undefined ? {} : { "Content-Type": "application/json" },
-    body: body === undefined ? undefined : JSON.stringify(body),
-    credentials: "same-origin",
-  });
-  if (res.status === 401) notifyUnauthorized();
-  if (!res.ok) {
-    let message = res.statusText;
-    try {
-      const err = (await res.json()) as { message?: string };
-      if (typeof err.message === "string") message = err.message;
-    } catch {
-      // non-JSON body
-    }
-    throw new Error(message);
-  }
-  const text = await res.text();
-  return (text ? JSON.parse(text) : undefined) as T;
-}
+const request = <T,>(method: string, path: string, body?: unknown) =>
+  send<T>(method, `/api/v1/spending/msi${path}`, body);
 
+/** Same day next month; the 31st of a month lands on the last day of a shorter one. */
 function nextMonthSameDay(iso: string) {
-  const d = new Date(`${iso}T12:00:00`);
-  d.setMonth(d.getMonth() + 1);
-  return d.toISOString().slice(0, 10);
+  const [y, m, d] = iso.split("-").map(Number);
+  const last = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(y, m, Math.min(d, last))).toISOString().slice(0, 10);
 }
 
 export function MsiConvertDialog({
@@ -66,6 +48,7 @@ export function MsiConvertDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const { t } = useTranslation();
+  const qc = useQueryClient();
   // Plain fetches: the holdings page tests mock react-query partially.
   const [candidates, setCandidates] = useState<Candidate[] | null>(null);
   const [activityId, setActivityId] = useState("");
@@ -78,7 +61,10 @@ export function MsiConvertDialog({
     setCandidates(null);
     request<Candidate[]>("GET", "/candidates?days=120")
       .then(setCandidates)
-      .catch((e: Error) => toast.error(e.message));
+      .catch((e: Error) => {
+        setCandidates([]);
+        toast.error(e.message);
+      });
   }, [open]);
   const chosen = candidates?.find((c) => c.activityId === activityId);
 
@@ -95,7 +81,8 @@ export function MsiConvertDialog({
       setActivityId("");
       setName("");
       onOpenChange(false);
-      window.location.reload();
+      // The charge became a loan: balances, holdings and envelopes all moved.
+      void qc.invalidateQueries();
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -113,7 +100,9 @@ export function MsiConvertDialog({
   };
 
   const monthly = chosen ? chosen.amount / Math.max(1, Number(months) || 1) : 0;
-  const ready = !!chosen && Number(months) >= 1 && !!firstDue && !busy;
+  const count = Number(months);
+  const ready =
+    !!chosen && Number.isInteger(count) && count >= 2 && count <= 60 && !!firstDue && !busy;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -126,12 +115,15 @@ export function MsiConvertDialog({
           <div className="space-y-1.5">
             <Label className="text-xs">{t("holdings:msi.charge")}</Label>
             <ResponsiveSelect
+              sheetTitle={t("holdings:msi.charge")}
               value={activityId}
               onValueChange={pick}
               placeholder={candidates === null ? t("common:loading") : t("holdings:msi.pickCharge")}
               options={(candidates ?? []).map((c) => ({
                 value: c.activityId,
-                label: `${c.date} · ${c.accountName} · ${c.notes ?? ""} · ${c.amount.toFixed(2)} ${c.currency}`,
+                label: [c.date, c.accountName, c.notes, `${c.amount.toFixed(2)} ${c.currency}`]
+                  .filter(Boolean)
+                  .join(" · "),
               }))}
             />
             {candidates?.length === 0 && (
@@ -140,23 +132,37 @@ export function MsiConvertDialog({
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label className="text-xs">{t("holdings:msi.months")}</Label>
+              <Label htmlFor="msi-months" className="text-xs">
+                {t("holdings:msi.months")}
+              </Label>
               <Input
+                id="msi-months"
                 type="number"
-                min={1}
+                inputMode="numeric"
+                min={2}
                 max={60}
+                step={1}
                 value={months}
                 onChange={(e) => setMonths(e.target.value)}
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">{t("holdings:msi.firstDue")}</Label>
-              <Input type="date" value={firstDue} onChange={(e) => setFirstDue(e.target.value)} />
+              <Label htmlFor="msi-first-due" className="text-xs">
+                {t("holdings:msi.firstDue")}
+              </Label>
+              <Input
+                id="msi-first-due"
+                type="date"
+                value={firstDue}
+                onChange={(e) => setFirstDue(e.target.value)}
+              />
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">{t("holdings:msi.name")}</Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} />
+            <Label htmlFor="msi-name" className="text-xs">
+              {t("holdings:msi.name")}
+            </Label>
+            <Input id="msi-name" value={name} onChange={(e) => setName(e.target.value)} />
           </div>
           {chosen && (
             <p className="text-muted-foreground text-xs">

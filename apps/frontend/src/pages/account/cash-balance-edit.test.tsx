@@ -7,8 +7,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import AccountMetrics from "./account-metrics";
 
 const mocks = vi.hoisted(() => ({ createActivity: vi.fn() }));
+const plan = vi.hoisted(() => ({ getIncomePlan: vi.fn() }));
 
 vi.mock("@/adapters", () => mocks);
+vi.mock("@/features/spending/adapters/income-plan", () => plan);
 vi.mock("@wealthfolio/ui/components/ui/use-toast", () => ({ toast: vi.fn() }));
 vi.mock("./performance-grid", () => ({ PerformanceGrid: () => null }));
 
@@ -66,6 +68,7 @@ describe("cash balance editing", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.createActivity.mockResolvedValue({ id: "adjustment-1" });
+    plan.getIncomePlan.mockResolvedValue({ lines: [], constants: [] });
   });
 
   it("adjusts USD from its native balance, not the converted HKD total", async () => {
@@ -89,7 +92,7 @@ describe("cash balance editing", () => {
     expect(mocks.createActivity).toHaveBeenCalledWith(
       expect.objectContaining({
         accountId: "account-1",
-        activityType: "INTEREST",
+        activityType: "DEPOSIT",
         currency: "USD",
         amount: 10,
       }),
@@ -159,7 +162,7 @@ describe("cash balance editing", () => {
 
     await waitFor(() =>
       expect(mocks.createActivity).toHaveBeenCalledWith(
-        expect.objectContaining({ currency: "HKD", activityType: "INTEREST", amount: 50 }),
+        expect.objectContaining({ currency: "HKD", activityType: "DEPOSIT", amount: 50 }),
       ),
     );
   });
@@ -221,7 +224,7 @@ describe("cash balance editing", () => {
 
     await waitFor(() =>
       expect(mocks.createActivity).toHaveBeenCalledWith(
-        expect.objectContaining({ currency: "USD", activityType: "INTEREST", amount: 5 }),
+        expect.objectContaining({ currency: "USD", activityType: "DEPOSIT", amount: 5 }),
       ),
     );
   });
@@ -259,14 +262,31 @@ describe("cash balance editing", () => {
     await user.type(input, "110");
     rerenderMetrics({ cashCurrencySplit: [{ ...cashCurrencySplit[1], valueLocal: 105 }] });
     expect(input).toHaveValue("110");
-    expect(screen.getByText("Interest: 5 USD")).toBeInTheDocument();
+    expect(screen.getByText("Deposit: 5 USD")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() =>
       expect(mocks.createActivity).toHaveBeenCalledWith(
-        expect.objectContaining({ currency: "USD", activityType: "INTEREST", amount: 5 }),
+        expect.objectContaining({ currency: "USD", activityType: "DEPOSIT", amount: 5 }),
       ),
     );
+  });
+
+  it("books growth as interest on an account the plan gives a yield", async () => {
+    plan.getIncomePlan.mockResolvedValue({
+      lines: [],
+      constants: [],
+      liquidity: { rates: { "account-1": 9.5 } },
+    });
+    const user = userEvent.setup();
+    renderMetrics({ cashCurrencySplit: [cashCurrencySplit[1]] });
+
+    await user.click(screen.getByRole("button", { name: "Adjust cash balance" }));
+    const input = screen.getByLabelText("New balance");
+    await user.clear(input);
+    await user.type(input, "105");
+
+    expect(await screen.findByText("Interest: 5 USD")).toBeInTheDocument();
   });
 
   it("initializes a fresh draft when reopened", async () => {

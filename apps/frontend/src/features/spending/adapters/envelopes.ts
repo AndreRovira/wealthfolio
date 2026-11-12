@@ -1,7 +1,5 @@
 // Envelopes are a fork feature served only by the web host, so this adapter
 // talks to /api/v1 directly instead of going through the command table.
-import { profileFetch } from "@/features/profiles/session";
-import { notifyUnauthorized } from "@/lib/auth-token";
 
 import type {
   ActivityEnvelope,
@@ -19,29 +17,12 @@ import type {
   MoveInput,
 } from "../types/envelopes";
 
+import { request as send } from "./request";
+
 const BASE = "/api/v1/spending/envelopes";
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const res = await profileFetch(`${BASE}${path}`, {
-    method,
-    headers: body === undefined ? {} : { "Content-Type": "application/json" },
-    body: body === undefined ? undefined : JSON.stringify(body),
-    credentials: "same-origin",
-  });
-  if (res.status === 401) notifyUnauthorized();
-  if (!res.ok) {
-    let message = res.statusText;
-    try {
-      const err = (await res.json()) as { message?: string };
-      if (typeof err.message === "string") message = err.message;
-    } catch {
-      // non-JSON error body
-    }
-    throw new Error(message);
-  }
-  const text = await res.text();
-  return (text ? JSON.parse(text) : undefined) as T;
-}
+const request = <T>(method: string, path: string, body?: unknown) =>
+  send<T>(method, `${BASE}${path}`, body);
 
 export const getEnvelopeSnapshot = (asOf?: string) =>
   request<EnvelopeSnapshot>("GET", `/snapshot${asOf ? `?asOf=${asOf}` : ""}`);
