@@ -202,7 +202,13 @@ export function evaluatePlan(
   external: Record<string, number> = {},
 ): EvaluatedLine[] {
   const byRef = new Map<string, PlanLine>();
-  for (const l of plan.lines) byRef.set(`${l.block}.${l.key}`, l);
+  // Two lines under one key would both show the later one's value and count twice.
+  const dupes = new Set<string>();
+  for (const l of plan.lines) {
+    const ref = `${l.block}.${l.key}`;
+    if (byRef.has(ref)) dupes.add(ref);
+    byRef.set(ref, l);
+  }
   const constants = new Map([
     ...Object.entries(external),
     ...plan.constants.map((c) => [c.key, c.value] as [string, number]),
@@ -241,6 +247,7 @@ export function evaluatePlan(
 
   return plan.lines.map((line) => {
     const ref = `${line.block}.${line.key}`;
+    if (dupes.has(ref)) return { line, value: null, error: `duplicate ${ref}` };
     try {
       return { line, value: resolve(ref), error: null };
     } catch (e) {
@@ -264,8 +271,11 @@ export const expectedPaycheck = (rows: EvaluatedLine[]) =>
  * with the plan so the server can fill rule lines that point at the plan
  * without evaluating formulas itself.
  */
-export function resolvePlan(plan: IncomePlan): Record<string, number> {
-  const rows = evaluatePlan(plan);
+export function resolvePlan(
+  plan: IncomePlan,
+  external: Record<string, number> = {},
+): Record<string, number> {
+  const rows = evaluatePlan(plan, external);
   const out: Record<string, number> = {};
   for (const r of rows) {
     if (r.value) out[`${r.line.block}.${r.line.key}`] = round2(r.value.quincena);

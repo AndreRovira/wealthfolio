@@ -1311,6 +1311,7 @@
     "saved": "Plan guardado",
     "saveFailed": "No se pudo guardar el plan",
     "unsaved": "Cambios sin guardar",
+    "fixErrors": "Corrige las líneas marcadas en rojo para guardar.",
     "paycheckMath": "Cuenta de la quincena",
     "expectedFromPlan": "Neto esperado por quincena (líneas base marcadas)",
     "fixedOtherLines": "Líneas fijas de la regla salvo el remanente",

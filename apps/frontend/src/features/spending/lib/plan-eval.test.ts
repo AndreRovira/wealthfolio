@@ -115,4 +115,27 @@ describe("billLastPaid", () => {
     });
     expect(billLastPaid(bill(null, null, "monthly")).date).toBeNull();
   });
+
+  it("flags two lines under one key and resolves live figures the editor shows", () => {
+    const line = (id: string, key: string, formula: string | null, amount: number | null) => ({
+      id,
+      block: "savings" as const,
+      key,
+      name: key,
+      basis: "quincena" as const,
+      amount,
+      formula,
+      inPaycheck: false,
+      sortOrder: 0,
+    });
+    const dupes = evaluatePlan({
+      lines: [line("a", "x", null, 1), line("b", "x", null, 2)],
+      constants: [],
+    });
+    expect(dupes.map((r) => r.error)).toEqual(["duplicate savings.x", "duplicate savings.x"]);
+
+    const plan = { lines: [line("a", "rent", "bill.rent", null)], constants: [] };
+    expect(resolvePlan(plan)["savings.rent"]).toBeUndefined();
+    expect(resolvePlan(plan, { "bill.rent": 50 })["savings.rent"]).toBe(50);
+  });
 });

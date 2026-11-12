@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -9,22 +9,17 @@ import {
   Checkbox,
   Icons,
   Input,
-  Page,
-  PageContent,
-  PageHeader,
   PrivacyAmount,
   ResponsiveSelect,
   Skeleton,
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
 } from "@wealthfolio/ui";
 
+import { SwipablePage, type SwipablePageView } from "@/components/page";
 import { cn } from "@/lib/utils";
 
 import { getIncomePlan, saveIncomePlan, type IncomePlanDocument } from "../adapters/income-plan";
 import { FxPendingCard } from "../components/fx-pending-card";
+import { LoadFailed } from "../components/load-failed";
 import { PaycheckPlanCard } from "../components/paycheck-plan-card";
 import { ENVELOPES_KEY, useEnvelopeMutations, useEnvelopeSnapshot } from "../hooks/use-envelopes";
 import { useReconcile, type Reconcile } from "../hooks/use-reconcile";
@@ -54,6 +49,13 @@ const PLAN_KEY = "spending_income_plan";
 const BLOCKS: PlanBlock[] = ["gross", "net", "base"];
 const SAVINGS_BLOCKS: PlanBlock[] = ["savings"];
 const BASES: PlanBasis[] = ["quincena", "monthly", "annual"];
+/** One chart colour per block, so the three income tables and savings read apart at a glance. */
+const BLOCK_COLOR: Record<PlanBlock, string> = {
+  gross: "var(--chart-1)",
+  net: "var(--chart-2)",
+  base: "var(--chart-3)",
+  savings: "var(--success)",
+};
 
 const newId = () => Math.random().toString(36).slice(2, 10);
 const slug = (name: string) =>
@@ -64,88 +66,13 @@ const slug = (name: string) =>
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_|_$/g, "");
 
-/** The plan page: the spreadsheet's income block, the paycheck split, and bills annualized. */
-export default function SpendingPlanPage() {
-  const { t } = useTranslation();
-  const navigate = useNavigate();
-  const [params, setParams] = useSearchParams();
-  const tab = params.get("tab") ?? "income";
-  const snapshot = useEnvelopeSnapshot();
-  const planQuery = useQuery({ queryKey: [PLAN_KEY], queryFn: getIncomePlan });
-
-  return (
-    <Page>
-      <PageHeader
-        heading={t("spending:plan.heading")}
-        text={t("spending:plan.subheading")}
-        onBack={() => navigate("/spending/envelopes")}
-        actions={
-          <Button variant="ghost" size="sm" onClick={() => navigate("/spending/envelopes")}>
-            <Icons.Wallet className="me-1.5 h-3.5 w-3.5" />
-            {t("spending:envelopes.heading")}
-          </Button>
-        }
-      />
-      <PageContent className="space-y-4">
-        <Tabs value={tab} onValueChange={(v) => setParams({ tab: String(v) })}>
-          <TabsList className="flex w-full max-w-xl overflow-x-auto sm:grid sm:grid-cols-5">
-            <TabsTrigger value="income" className="shrink-0">{t("spending:plan.tabIncome")}</TabsTrigger>
-            <TabsTrigger value="paycheck" className="shrink-0">{t("spending:plan.tabPaycheck")}</TabsTrigger>
-            <TabsTrigger value="bills" className="shrink-0">{t("spending:plan.tabBills")}</TabsTrigger>
-            <TabsTrigger value="savings" className="shrink-0">{t("spending:plan.tabSavings")}</TabsTrigger>
-            <TabsTrigger value="reconcile" className="shrink-0">{t("spending:plan.tabReconcile")}</TabsTrigger>
-          </TabsList>
-          <TabsContent value="income" className="mt-4">
-            {planQuery.data ? (
-              <IncomeEditor initial={planQuery.data} />
-            ) : (
-              <Skeleton className="h-40 w-full" />
-            )}
-          </TabsContent>
-          <TabsContent value="paycheck" className="mt-4">
-            {snapshot.data && planQuery.data ? (
-              <PaycheckTab snapshot={snapshot.data} plan={planQuery.data} />
-            ) : (
-              <Skeleton className="h-40 w-full" />
-            )}
-          </TabsContent>
-          <TabsContent value="bills" className="mt-4">
-            {snapshot.data ? <BillsTab snapshot={snapshot.data} /> : <Skeleton className="h-40 w-full" />}
-          </TabsContent>
-          <TabsContent value="savings" className="mt-4">
-            {planQuery.data ? (
-              <IncomeEditor initial={planQuery.data} savings />
-            ) : (
-              <Skeleton className="h-40 w-full" />
-            )}
-          </TabsContent>
-          <TabsContent value="reconcile" className="mt-4">
-            {planQuery.data ? <ReconcileTab plan={planQuery.data} /> : <Skeleton className="h-40 w-full" />}
-          </TabsContent>
-        </Tabs>
-      </PageContent>
-    </Page>
-  );
-}
-
-// ----------------------------- income -----------------------------
-
-/**
- * Editor for the plan's blocks. `savings` shows the SAVINGS block with its rate
- * against net prorated and the liquidity accounts instead of the income blocks.
- */
-function IncomeEditor({ initial, savings = false }: { initial: IncomePlanDocument; savings?: boolean }) {
-  const { t } = useTranslation();
-  const qc = useQueryClient();
-  const [doc, setDoc] = useState<IncomePlanDocument>(initial);
-  const [dirty, setDirty] = useState(false);
-  useEffect(() => {
-    setDoc(initial);
-    setDirty(false);
-  }, [initial]);
-  const snapshot = useEnvelopeSnapshot().data;
+/** Live figures the plan's formulas read, and the liquid accounts they come from. */
+function usePlanExternals(
+  doc: IncomePlanDocument | undefined,
+  snapshot: EnvelopeSnapshot | undefined,
+) {
   const cash = useReconcile().data?.cash;
-  const rates = doc.liquidity?.rates;
+  const rates = doc?.liquidity?.rates;
   const liquid = useMemo<LiquidRow[]>(
     () =>
       (cash ?? [])
@@ -158,17 +85,31 @@ function IncomeEditor({ initial, savings = false }: { initial: IncomePlanDocumen
         })),
     [cash, rates],
   );
-  const liquidityIncome = liquidityYield(liquid).income;
-  const rows = useMemo(
-    () => evaluatePlan(doc, planExternals(snapshot, liquidityIncome)),
-    [doc, snapshot, liquidityIncome],
+  const external = useMemo(
+    () => planExternals(snapshot, liquidityYield(liquid).income),
+    [snapshot, liquid],
   );
-  const netTotal = sumQuincena(rows.filter((r) => r.line.block === "net"));
-  const currency = snapshot?.currency ?? "MXN";
+  return { liquid, external };
+}
+
+/** The plan page: the spreadsheet's income block, the paycheck split, and bills annualized. */
+export default function SpendingPlanPage() {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+  const snapshot = useEnvelopeSnapshot();
+  const planQuery = useQuery({ queryKey: [PLAN_KEY], queryFn: getIncomePlan });
+  const saved = planQuery.data;
+  // Unsaved edits live above the tabs, so moving to another tab keeps them.
+  const [draft, setDraft] = useState<IncomePlanDocument | null>(null);
+  const doc = draft ?? saved;
+  const { liquid, external } = usePlanExternals(doc, snapshot.data);
   const save = useMutation({
-    mutationFn: () => saveIncomePlan(doc),
-    onSuccess: () => {
-      setDirty(false);
+    mutationFn: (sent: IncomePlanDocument) => saveIncomePlan(sent, external),
+    onSuccess: (_res, sent) => {
+      qc.setQueryData([PLAN_KEY], sent);
+      // Edits typed while the save was on its way stay as the draft.
+      setDraft((d) => (d === sent ? null : d));
       void qc.invalidateQueries({ queryKey: [PLAN_KEY] });
       // Rule lines that read the plan change with it.
       void qc.invalidateQueries({ queryKey: [ENVELOPES_KEY] });
@@ -177,12 +118,139 @@ function IncomeEditor({ initial, savings = false }: { initial: IncomePlanDocumen
     onError: () => toast.error(t("spending:plan.saveFailed")),
   });
 
-  const update = (fn: (d: IncomePlanDocument) => IncomePlanDocument) => {
-    setDoc((d) => fn(d));
-    setDirty(true);
-  };
+  const loading = <Skeleton className="h-40 w-full" />;
+  const failed = planQuery.isError || snapshot.isError;
+  const pane = (ready: unknown, render: () => ReactNode) =>
+    failed ? (
+      <LoadFailed
+        onRetry={() => {
+          void planQuery.refetch();
+          void snapshot.refetch();
+        }}
+      />
+    ) : ready ? (
+      render()
+    ) : (
+      loading
+    );
+  const editor = (savings: boolean) =>
+    pane(doc && saved, () => (
+      <IncomeEditor
+        doc={doc!}
+        saved={saved!}
+        savings={savings}
+        dirty={draft !== null}
+        saving={save.isPending}
+        external={external}
+        liquid={liquid}
+        currency={snapshot.data?.currency ?? "MXN"}
+        onChange={(fn) => setDraft((d) => fn(d ?? saved!))}
+        onSave={() => save.mutate(doc!)}
+      />
+    ));
+  const toEnvelopes = (
+    <Button
+      variant="ghost"
+      size="sm"
+      aria-label={t("spending:envelopes.heading")}
+      onClick={() => navigate("/spending/envelopes")}
+    >
+      <Icons.Wallet className="h-3.5 w-3.5 md:me-1.5" />
+      <span className="hidden md:inline">{t("spending:envelopes.heading")}</span>
+    </Button>
+  );
+  // Same swipeable tabs as the dashboard and holdings pages.
+  const views: SwipablePageView[] = [
+    { value: "income", label: t("spending:plan.tabIncome"), icon: Icons.DollarSign, content: editor(false) },
+    {
+      value: "paycheck",
+      label: t("spending:plan.tabPaycheck"),
+      icon: Icons.Banknote,
+      content: pane(snapshot.data && doc, () => (
+        <PaycheckTab snapshot={snapshot.data!} plan={doc!} external={external} dirty={draft !== null} />
+      )),
+    },
+    {
+      value: "bills",
+      label: t("spending:plan.tabBills"),
+      icon: Icons.Receipt,
+      content: pane(snapshot.data, () => <BillsTab snapshot={snapshot.data!} />),
+    },
+    { value: "savings", label: t("spending:plan.tabSavings"), icon: Icons.PiggyBank, content: editor(true) },
+    {
+      value: "reconcile",
+      label: t("spending:plan.tabReconcile"),
+      icon: Icons.ListChecks,
+      content: pane(saved, () => <ReconcileTab plan={saved!} external={external} />),
+    },
+  ].map((v) => ({ ...v, actions: toEnvelopes }));
+
+  return (
+    <SwipablePage
+      views={views}
+      defaultView="income"
+      title={t("spending:plan.heading")}
+      mobileActionsPlacement="header"
+    />
+  );
+}
+
+// ----------------------------- income -----------------------------
+
+/**
+ * Editor for the plan's blocks. `savings` shows the SAVINGS block with its rate
+ * against net prorated and the liquidity accounts instead of the income blocks.
+ */
+function IncomeEditor({
+  doc,
+  saved,
+  savings,
+  dirty,
+  saving,
+  external,
+  liquid,
+  currency,
+  onChange,
+  onSave,
+}: {
+  doc: IncomePlanDocument;
+  saved: IncomePlanDocument;
+  savings: boolean;
+  dirty: boolean;
+  saving: boolean;
+  external: Record<string, number>;
+  liquid: LiquidRow[];
+  currency: string;
+  onChange: (fn: (d: IncomePlanDocument) => IncomePlanDocument) => void;
+  onSave: () => void;
+}) {
+  const { t } = useTranslation();
+  const rows = useMemo(() => evaluatePlan(doc, external), [doc, external]);
+  // Rows keep the saved plan's order, largest first: sorting by the amount being
+  // typed would move the row under the keyboard. Lines not saved yet go last.
+  const rank = useMemo(
+    () => new Map(evaluatePlan(saved, external).map((r) => [r.line.id, r.value?.annual ?? -1])),
+    [saved, external],
+  );
+  const hasErrors = rows.some((r) => r.error);
+  const netTotal = sumQuincena(rows.filter((r) => r.line.block === "net"));
+  const update = onChange;
   const setLine = (id: string, patch: Partial<PlanLine>) =>
-    update((d) => ({ ...d, lines: d.lines.map((l) => (l.id === id ? { ...l, ...patch } : l)) }));
+    update((d) => ({
+      ...d,
+      lines: d.lines.map((l) =>
+        l.id !== id
+          ? l
+          : {
+              ...l,
+              ...patch,
+              // A saved line keeps its key: formulas and rule lines point at it.
+              ...(patch.name !== undefined && !rank.has(id)
+                ? { key: slug(patch.name) || l.key }
+                : {}),
+            },
+      ),
+    }));
   const addLine = (block: PlanBlock) =>
     update((d) => ({
       ...d,
@@ -211,8 +279,13 @@ function IncomeEditor({ initial, savings = false }: { initial: IncomePlanDocumen
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-end gap-2">
-        {dirty && <span className="text-muted-foreground text-xs">{t("spending:plan.unsaved")}</span>}
-        <Button size="sm" onClick={() => save.mutate()} disabled={!dirty || save.isPending}>
+        {hasErrors ? (
+          <span className="text-destructive text-xs">{t("spending:plan.fixErrors")}</span>
+        ) : (
+          dirty && <span className="text-muted-foreground text-xs">{t("spending:plan.unsaved")}</span>
+        )}
+        {/* A line in error would save as zero and pull the paycheck split with it. */}
+        <Button size="sm" onClick={onSave} disabled={!dirty || saving || hasErrors}>
           <Icons.Check className="me-1.5 h-3.5 w-3.5" />
           {t("common:save")}
         </Button>
@@ -220,12 +293,18 @@ function IncomeEditor({ initial, savings = false }: { initial: IncomePlanDocumen
       {(savings ? SAVINGS_BLOCKS : BLOCKS).map((block) => {
         const blockRows = rows
           .filter((r) => r.line.block === block)
-          .sort((a, b) => (b.value?.annual ?? -1) - (a.value?.annual ?? -1));
+          .sort((a, b) => (rank.get(b.line.id) ?? -2) - (rank.get(a.line.id) ?? -2));
         const total = sumQuincena(blockRows);
+        const totalMonthly = round2(blockRows.reduce((s, r) => s + (r.value?.monthly ?? 0), 0));
+        const totalAnnual = round2(blockRows.reduce((s, r) => s + (r.value?.annual ?? 0), 0));
         return (
           <section key={block} className={cn(CARD, "overflow-x-auto")}>
             <div className="flex items-center justify-between px-4 pt-3">
-              <h3 className="text-foreground text-sm font-semibold">
+              <h3 className="text-foreground flex items-center gap-2 text-sm font-semibold">
+                <span
+                  className="h-3.5 w-1 rounded-full"
+                  style={{ backgroundColor: BLOCK_COLOR[block] }}
+                />
                 {t(`spending:plan.block_${block}`)}
               </h3>
               <Button variant="ghost" size="sm" onClick={() => addLine(block)}>
@@ -249,7 +328,7 @@ function IncomeEditor({ initial, savings = false }: { initial: IncomePlanDocumen
                 <span>{t("spending:plan.total")}</span>
                 <span className="tabular-nums">
                   <PrivacyAmount value={total} currency={currency} /> ·{" "}
-                  <PrivacyAmount value={round2(total * 24)} currency={currency} />
+                  <PrivacyAmount value={totalAnnual} currency={currency} />
                 </span>
               </div>
               {savings && netTotal > 0 && (
@@ -299,10 +378,10 @@ function IncomeEditor({ initial, savings = false }: { initial: IncomePlanDocumen
                     <PrivacyAmount value={total} currency={currency} />
                   </td>
                   <td className="px-2 py-2 text-end tabular-nums">
-                    <PrivacyAmount value={round2(total * 2)} currency={currency} />
+                    <PrivacyAmount value={totalMonthly} currency={currency} />
                   </td>
                   <td className="px-2 py-2 text-end tabular-nums">
-                    <PrivacyAmount value={round2(total * 24)} currency={currency} />
+                    <PrivacyAmount value={totalAnnual} currency={currency} />
                   </td>
                   <td colSpan={2} />
                 </tr>
@@ -380,8 +459,7 @@ function LineRow({
           placeholder={t("spending:plan.colName")}
           className="h-7 text-xs"
           onChange={(e) => {
-            const name = e.target.value;
-            onChange({ name, key: line.key.startsWith("line_") || line.key === slug(line.name) ? slug(name) || line.key : line.key });
+            onChange({ name: e.target.value });
           }}
         />
         <div className="text-muted-foreground mt-0.5 font-mono text-2xs">
@@ -468,22 +546,59 @@ function LineRow({
   );
 }
 
-/** Mobile layout of a plan line: inputs stacked, the three figures underneath. */
-function LineCard({
+type LineProps = Parameters<typeof LineRow>[0];
+
+/** Mobile layout of a plan line: one row to read, opened into the editor on tap. */
+function LineCard(props: LineProps) {
+  const { line, value, error } = props.row;
+  // A plan is read far more often than edited; a new line opens ready to fill in.
+  const [open, setOpen] = useState(line.name === "");
+  if (open) return <LineCardEditor {...props} onCollapse={() => setOpen(false)} />;
+  return (
+    <button
+      type="button"
+      onClick={() => setOpen(true)}
+      className={cn(
+        "border-border/40 flex w-full items-center gap-2 rounded-lg border px-2.5 py-1.5 text-start text-xs",
+        error && "bg-destructive/5",
+      )}
+    >
+      <span className="min-w-0 flex-1">
+        <span className="text-foreground block truncate">{line.name || "—"}</span>
+        <span
+          className={cn(
+            "block truncate font-mono text-2xs",
+            error ? "text-destructive" : "text-muted-foreground",
+          )}
+        >
+          {error ?? `${line.block}.${line.key}`}
+        </span>
+      </span>
+      {value && (
+        <span className="shrink-0 text-end tabular-nums">
+          <span className="text-foreground block font-medium">
+            <PrivacyAmount value={value.annual} currency={props.currency} />
+          </span>
+          <span className="text-muted-foreground block text-2xs">
+            <PrivacyAmount value={value.quincena} currency={props.currency} /> ·{" "}
+            <PrivacyAmount value={value.monthly} currency={props.currency} />
+          </span>
+        </span>
+      )}
+      <Icons.ChevronDown className="text-muted-foreground h-3.5 w-3.5 shrink-0" />
+    </button>
+  );
+}
+
+function LineCardEditor({
   row,
   block,
   currency,
   gross,
   onChange,
   onRemove,
-}: {
-  row: EvaluatedLine;
-  block: PlanBlock;
-  currency: string;
-  gross: number | null;
-  onChange: (patch: Partial<PlanLine>) => void;
-  onRemove: () => void;
-}) {
+  onCollapse,
+}: LineProps & { onCollapse: () => void }) {
   const { t } = useTranslation();
   const { line, value, error } = row;
   const isFormula = line.formula !== null;
@@ -504,8 +619,7 @@ function LineCard({
           placeholder={t("spending:plan.colName")}
           className="h-8 flex-1 text-xs"
           onChange={(e) => {
-            const name = e.target.value;
-            onChange({ name, key: line.key.startsWith("line_") || line.key === slug(line.name) ? slug(name) || line.key : line.key });
+            onChange({ name: e.target.value });
           }}
         />
         <ResponsiveSelect
@@ -514,8 +628,11 @@ function LineCard({
           options={BASES.map((b) => ({ value: b, label: t(`spending:plan.basis_${b}`) }))}
           triggerClassName="h-8 w-28 text-xs"
         />
-        <button type="button" className="text-muted-foreground hover:text-destructive" onClick={onRemove} aria-label={t("common:delete")}>
+        <button type="button" className="text-muted-foreground hover:text-destructive p-1.5" onClick={onRemove} aria-label={t("common:delete")}>
           <Icons.Trash className="h-4 w-4" />
+        </button>
+        <button type="button" className="text-muted-foreground hover:text-foreground p-1.5" onClick={onCollapse} aria-label={t("common:close")}>
+          <Icons.ChevronUp className="h-4 w-4" />
         </button>
       </div>
       <div className="mt-1.5 flex items-center gap-1.5">
@@ -707,23 +824,23 @@ function ConstantsEditor({
       </div>
       <div className="space-y-1.5">
         {doc.constants.map((c, i) => (
-          <div key={i} className="flex items-center gap-2">
+          <div key={i} className="flex flex-wrap items-center gap-2">
             <Input
               value={c.key}
-              className="h-7 w-44 font-mono text-xs"
+              className="h-7 w-36 font-mono text-xs sm:w-44"
               onChange={(e) => set(i, { key: e.target.value.trim() })}
             />
             <Input
               type="number"
               step="0.01"
               value={c.value}
-              className="h-7 w-32 text-end text-xs tabular-nums"
+              className="h-7 w-24 text-end text-xs tabular-nums sm:w-32"
               onChange={(e) => set(i, { value: Number(e.target.value) })}
             />
             <Input
               value={c.label}
               placeholder={t("spending:plan.constantLabel")}
-              className="h-7 flex-1 text-xs"
+              className="h-7 min-w-32 flex-1 text-xs"
               onChange={(e) => set(i, { label: e.target.value })}
             />
             <button
@@ -743,12 +860,23 @@ function ConstantsEditor({
 
 // ----------------------------- paycheck -----------------------------
 
-function PaycheckTab({ snapshot, plan }: { snapshot: EnvelopeSnapshot; plan: IncomePlanDocument }) {
+function PaycheckTab({
+  snapshot,
+  plan,
+  external,
+  dirty,
+}: {
+  snapshot: EnvelopeSnapshot;
+  plan: IncomePlanDocument;
+  external: Record<string, number>;
+  /** The plan has unsaved edits: the figures preview them, the rule waits for the save. */
+  dirty: boolean;
+}) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const m = useEnvelopeMutations();
-  const expected = useMemo(() => expectedPaycheck(evaluatePlan(plan)), [plan]);
-  const planRefs = useMemo(() => resolvePlan(plan), [plan]);
+  const expected = useMemo(() => expectedPaycheck(evaluatePlan(plan, external)), [plan, external]);
+  const planRefs = useMemo(() => resolvePlan(plan, external), [plan, external]);
   const rules = snapshot.rules.filter((r) => r.active && r.splits.some((s) => s.amount != null));
   const rule = rules.find((r) => r.id === plan.paycheck?.ruleId) ?? rules[0];
   const linked = rule?.splits.find((s) => s.source === SOURCE_REMAINDER);
@@ -786,7 +914,10 @@ function PaycheckTab({ snapshot, plan }: { snapshot: EnvelopeSnapshot; plan: Inc
     mutationFn: async () => {
       if (!rule || !target) return;
       // Plan first: the server works the remainder out from its saved values.
-      await saveIncomePlan({ ...plan, paycheck: { ruleId: rule.id, remainderEnvelopeId: remainder } });
+      await saveIncomePlan(
+        { ...plan, paycheck: { ruleId: rule.id, remainderEnvelopeId: remainder } },
+        external,
+      );
       await m.updateRule.mutateAsync({
         id: rule.id,
         input: {
@@ -855,7 +986,13 @@ function PaycheckTab({ snapshot, plan }: { snapshot: EnvelopeSnapshot; plan: Inc
                     t("spending:plan.notLinked")
                   )}
                 </span>
-                <Button size="sm" onClick={() => apply.mutate()} disabled={apply.isPending || !target}>
+                {dirty && <span className="text-muted-foreground text-2xs">{t("spending:plan.unsaved")}</span>}
+                {/* Never write a remainder worked out from a missing or negative paycheck. */}
+                <Button
+                  size="sm"
+                  onClick={() => apply.mutate()}
+                  disabled={apply.isPending || !target || dirty || expected <= 0 || shouldBe < 0}
+                >
                   {t("spending:plan.applyToRule")}
                 </Button>
               </div>
@@ -1022,13 +1159,20 @@ function BillsTab({ snapshot }: { snapshot: EnvelopeSnapshot }) {
 
 // ----------------------------- reconcile -----------------------------
 
-function ReconcileTab({ plan }: { plan: IncomePlanDocument }) {
+function ReconcileTab({
+  plan,
+  external,
+}: {
+  plan: IncomePlanDocument;
+  external: Record<string, number>;
+}) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const { data, isLoading } = useReconcile();
   const [tolerance, setTolerance] = useState(String(plan.reconcile?.tolerance ?? 1));
   const saveTolerance = useMutation({
-    mutationFn: () => saveIncomePlan({ ...plan, reconcile: { tolerance: Number(tolerance) || 0 } }),
+    mutationFn: () =>
+      saveIncomePlan({ ...plan, reconcile: { tolerance: Number(tolerance) || 0 } }, external),
     onSuccess: () => void qc.invalidateQueries({ queryKey: [PLAN_KEY] }),
     onError: () => toast.error(t("spending:plan.saveFailed")),
   });

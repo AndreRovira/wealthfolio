@@ -1248,6 +1248,7 @@
     "saved": "計畫已儲存",
     "saveFailed": "無法儲存計畫",
     "unsaved": "尚未儲存",
+    "fixErrors": "請先修正標紅的項目再儲存。",
     "paycheckMath": "薪資計算",
     "expectedFromPlan": "每半月預期淨額（已標記的基本列）",
     "fixedOtherLines": "規則固定列（不含餘額列）",

@@ -35,5 +35,6 @@ export async function getIncomePlan(): Promise<IncomePlanDocument> {
   return doc && Array.isArray(doc.lines) ? doc : EMPTY_PLAN;
 }
 
-export const saveIncomePlan = (doc: IncomePlanDocument) =>
-  request<IncomePlanDocument>("PUT", { ...doc, resolved: resolvePlan(doc) });
+/** `external` is what the editor evaluates with, so the saved values match what it shows. */
+export const saveIncomePlan = (doc: IncomePlanDocument, external: Record<string, number> = {}) =>
+  request<IncomePlanDocument>("PUT", { ...doc, resolved: resolvePlan(doc, external) });

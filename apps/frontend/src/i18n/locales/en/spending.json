@@ -1248,6 +1248,7 @@
     "saved": "Plan saved",
     "saveFailed": "Could not save the plan",
     "unsaved": "Unsaved changes",
+    "fixErrors": "Fix the lines marked in red to save.",
     "paycheckMath": "Paycheck arithmetic",
     "expectedFromPlan": "Expected net per quincena (flagged base lines)",
     "fixedOtherLines": "Fixed rule lines except the remainder",
