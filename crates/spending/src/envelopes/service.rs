@@ -1057,6 +1057,7 @@ impl EnvelopeService {
         );
         let splits = group_splits(self.split_repo.list_for_activities(&activity_ids).await?);
         let fx = self.fx_service.as_ref();
+        let savings_pot = single_savings_pot(link_by_category, spending_meta);
 
         for activity in &activities {
             let Some(account_type) = account_types.get(&activity.account_id) else {
@@ -1079,6 +1080,7 @@ impl EnvelopeService {
             // A pinned activity goes whole to its pot (or to none); otherwise
             // each category allocation follows its link.
             let pin = activity_pin(activity);
+            let pinned = pin.is_some();
             // A deposit pinned to "no envelope" is money the envelopes already
             // counted (an expected credit), so no rule proposes a split for it.
             let income_native = match pin {
@@ -1112,6 +1114,14 @@ impl EnvelopeService {
                     ))
                 })
                 .collect(),
+            };
+            // Money brought back from an investing account takes no category
+            // (the reports show it as one figure), so nothing above places it.
+            let pots = match (&savings_pot, !pinned && pots.is_empty()) {
+                (Some(pot), true) if classification == SpendingClassification::FromSavings => {
+                    vec![(pot.clone(), spending_native)]
+                }
+                _ => pots,
             };
             for ((envelope_id, bill_id), native) in pots {
                 if start_by_envelope
@@ -1410,6 +1420,25 @@ fn pot_flow(classification: SpendingClassification, amount: Decimal) -> (Decimal
     } else {
         (classification.spending_amount(amount), SPENDING_TAXONOMY)
     }
+}
+
+/// The pot that money sent to investing accounts leaves from, which is where
+/// money brought back returns to.
+// ponytail: only while every linked savings category feeds one pot; with two,
+// a return has to be pinned, or returns need a category of their own.
+fn single_savings_pot(
+    links: &HashMap<&str, &EnvelopeCategoryLink>,
+    meta: &HashMap<String, Category>,
+) -> Option<PotKey> {
+    let pots: BTreeSet<PotKey> = links
+        .values()
+        .filter(|l| {
+            meta.get(&l.category_id)
+                .is_some_and(|c| c.taxonomy_id == SAVINGS_TAXONOMY)
+        })
+        .map(|l| (l.envelope_id.clone(), l.bill_id.clone()))
+        .collect();
+    (pots.len() == 1).then(|| pots.into_iter().next()).flatten()
 }
 
 /// The pot an activity was pinned to, if any.
@@ -1817,6 +1846,58 @@ mod tests {
         assert_eq!(
             pot_flow(SpendingClassification::InternalTransfer, amount),
             (Decimal::ZERO, SPENDING_TAXONOMY)
+        );
+    }
+
+    #[test]
+    fn money_brought_back_returns_to_the_one_pot_savings_leave_from() {
+        let category = |id: &str, taxonomy: &str| {
+            let c = Category {
+                id: id.into(),
+                taxonomy_id: taxonomy.into(),
+                parent_id: None,
+                name: id.into(),
+                key: id.into(),
+                color: String::new(),
+                description: None,
+                sort_order: 0,
+                created_at: Default::default(),
+                updated_at: Default::default(),
+                icon: None,
+            };
+            (c.id.clone(), c)
+        };
+        let meta: HashMap<String, Category> = [
+            category("food", SPENDING_TAXONOMY),
+            category("stocks", SAVINGS_TAXONOMY),
+            category("pension", SAVINGS_TAXONOMY),
+        ]
+        .into_iter()
+        .collect();
+        let link = |category: &str, envelope: &str| EnvelopeCategoryLink {
+            category_id: category.into(),
+            envelope_id: envelope.into(),
+            bill_id: None,
+        };
+        let pot = |links: &[EnvelopeCategoryLink]| {
+            let by_category = links.iter().map(|l| (l.category_id.as_str(), l)).collect();
+            single_savings_pot(&by_category, &meta)
+        };
+        let investment = Some(("investment".to_string(), None));
+        // Spending links do not count, and two savings categories in one pot are one pot.
+        assert_eq!(pot(&[link("food", "home")]), None);
+        assert_eq!(
+            pot(&[link("food", "home"), link("stocks", "investment")]),
+            investment
+        );
+        assert_eq!(
+            pot(&[link("stocks", "investment"), link("pension", "investment")]),
+            investment
+        );
+        // Two pots: nothing says which one a return belongs to.
+        assert_eq!(
+            pot(&[link("stocks", "investment"), link("pension", "retirement")]),
+            None
         );
     }
 

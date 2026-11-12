@@ -31,6 +31,8 @@ interface AccountMetricsProps {
   valuation?: AccountValuation | null;
   performance?: PerformanceResult | null;
   cashCurrencySplit?: CurrentValuationSplit[];
+  /** Decides what a balance that grew books as by default. */
+  accountType?: string;
   className?: string;
   compact?: boolean;
   isLoading?: boolean;
@@ -90,6 +92,7 @@ const AccountMetrics: React.FC<AccountMetricsProps> = ({
   valuation,
   performance,
   cashCurrencySplit,
+  accountType,
   className,
   compact = false,
   isLoading,
@@ -366,6 +369,7 @@ const AccountMetrics: React.FC<AccountMetricsProps> = ({
         <CashBalanceDialog
           key={valuation.accountId}
           accountId={valuation.accountId}
+          accountType={accountType}
           accountCurrency={valuation.accountCurrency}
           cashBalances={cashBalances ?? []}
           disabled={!canEditBalance}

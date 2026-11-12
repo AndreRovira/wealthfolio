@@ -319,6 +319,26 @@ describe("cash balance editing", () => {
     );
   });
 
+  it("books growth in a brokerage account as interest, with no envelope note", async () => {
+    const user = userEvent.setup();
+    renderMetrics({ cashCurrencySplit: [cashCurrencySplit[1]], accountType: "SECURITIES" });
+
+    await user.click(screen.getByRole("button", { name: "Adjust cash balance" }));
+    const input = screen.getByLabelText("New balance");
+    await user.clear(input);
+    await user.type(input, "105");
+
+    expect(await screen.findByText("Interest: 5 USD")).toBeInTheDocument();
+    expect(screen.queryByText(/envelopes/i)).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(mocks.createActivity).toHaveBeenCalledWith(
+        expect.objectContaining({ currency: "USD", activityType: "INTEREST", amount: 5 }),
+      ),
+    );
+  });
+
   it("leaves interest pending when the rule's split is not the deposit handed out", async () => {
     plan.getIncomePlan.mockResolvedValue({
       lines: [],

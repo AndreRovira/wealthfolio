@@ -36,6 +36,7 @@ import { useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { z } from "zod";
 import { getIncomePlan } from "@/features/spending/adapters/income-plan";
+import { AccountType } from "@/lib/constants";
 
 import { useBalanceUpdate, type BalanceUpdateKind } from "./use-balance-update";
 
@@ -46,6 +47,7 @@ interface CashBalance {
 
 interface CashBalanceDialogProps {
   accountId: string;
+  accountType?: string;
   accountCurrency: string;
   cashBalances: CashBalance[];
   disabled: boolean;
@@ -54,6 +56,7 @@ interface CashBalanceDialogProps {
 
 export function CashBalanceDialog({
   accountId,
+  accountType,
   accountCurrency,
   cashBalances,
   disabled,
@@ -95,12 +98,14 @@ export function CashBalanceDialog({
   const currentBalance = balances.find((balance) => balance.currency === currency)?.balance;
   const difference = (targetBalance ?? NaN) - (currentBalance ?? NaN);
   const amount = parseFloat(Math.abs(difference).toFixed(DECIMAL_PRECISION));
-  // A balance that grew by itself is interest only where the plan gives the
-  // account a yield; anywhere else money came in, so it books as a deposit.
+  // A balance that grew by itself is interest where the plan gives the
+  // account a yield, and in a brokerage account, whose idle cash sits in a
+  // money fund; anywhere else money came in, so it books as a deposit.
   const plan = useQuery({ queryKey: ["spending_income_plan"], queryFn: getIncomePlan });
   const paysInterest = (plan.data?.liquidity?.rates[accountId] ?? 0) > 0;
   const [chosenKind, setPositiveKind] = useState<BalanceUpdateKind | null>(null);
-  const positiveKind = chosenKind ?? (paysInterest ? "INTEREST" : "DEPOSIT");
+  const growsByItself = paysInterest || accountType === AccountType.SECURITIES;
+  const positiveKind = chosenKind ?? (growsByItself ? "INTEREST" : "DEPOSIT");
   const [negativeKind, setNegativeKind] = useState<BalanceUpdateKind>("WITHDRAWAL");
   const activityType = difference > 0 ? positiveKind : negativeKind;
   const kindOptions: { value: BalanceUpdateKind; label: string }[] =
@@ -241,7 +246,8 @@ export function CashBalanceDialog({
                     : `${kindOptions.find((o) => o.value === activityType)?.label}: ${formatBalance(amount)} ${currency}`
                   : null}
             </p>
-            {activityType === "INTEREST" && amount > 0 && (
+            {/* Envelopes follow cash accounts: brokerage interest reaches them when it is transferred out. */}
+            {activityType === "INTEREST" && amount > 0 && paysInterest && (
               <p className="text-muted-foreground text-xs">
                 {t("account:balance_edit.interest_routed")}
               </p>

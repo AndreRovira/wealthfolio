@@ -1187,6 +1187,7 @@ const AccountPage = () => {
                   valuation={metricsValuation}
                   performance={accountPerformance}
                   cashCurrencySplit={liveCurrentValuation?.summary.cashCurrencySplit}
+                  accountType={account?.accountType}
                   className="min-h-0 grow"
                   compact={showContributionLimitCard}
                   isLoading={isLoading}
