@@ -374,6 +374,28 @@ export function AppLauncher() {
         keywords: ["accounts", "manage", "edit", "settings"],
         label: t("common:component.manage_accounts"),
       },
+      // Fork: Spending has no entry in the menu, so its pages are listed here.
+      {
+        title: t("spending:envelopes.heading"),
+        href: "/spending/envelopes",
+        icon: <Icons.Wallet className="size-6" />,
+        keywords: ["envelopes", "sobres", "budget", "presupuesto", "spending", "gastos", "bills"],
+        label: t("spending:envelopes.heading"),
+      },
+      {
+        title: t("spending:plan.heading"),
+        href: "/spending/budget",
+        icon: <Icons.FileText className="size-6" />,
+        keywords: ["plan", "income", "ingresos", "paycheck", "quincena", "bills", "savings", "ahorro", "reconcile", "conciliar"],
+        label: t("spending:plan.heading"),
+      },
+      {
+        title: `${t("common:activities")}: ${t("activity:page.spending")}`,
+        href: "/activities?tab=spending",
+        icon: <Icons.Receipt className="size-6" />,
+        keywords: ["spending", "gastos", "transactions", "transacciones", "expenses"],
+        label: `${t("common:activities")}: ${t("activity:page.spending")}`,
+      },
       {
         title: t("common:component.manage_goals"),
         href: "/goals",

@@ -2,6 +2,7 @@ import { useNumberFormatting } from "@wealthfolio/ui";
 import { Icons } from "@wealthfolio/ui/components/ui/icons";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@wealthfolio/ui/components/ui/sheet";
 import { useTranslation } from "react-i18next";
+import { Link } from "react-router-dom";
 import { CategoryTrendChart } from "./category-trend-chart";
 import { CompactAmount } from "./compact-amount";
 import {
@@ -15,6 +16,9 @@ import {
   type ParsedHistoryPoint,
   type SelectedCategory,
 } from "./utils";
+
+/** Key prefix the server gives a credit-card liability row; the rest is the account id. */
+const CREDIT_CARD_KEY_PREFIX = "CREDIT_CARD:";
 
 /** Net-worth category color (CSS), with red for liabilities. */
 function categoryColor(selected: SelectedCategory): string {
@@ -139,6 +143,21 @@ export function CategoryDetailSheet({
                 </p>
                 <CategoryTrendChart data={trend} color={toneColor(change.amount)} />
               </div>
+
+              {/* Fork: a liability row leads to its history — the card's account, or the loan. */}
+              {selected.isLiability && (
+                <Link
+                  to={
+                    selected.key.startsWith(CREDIT_CARD_KEY_PREFIX)
+                      ? `/accounts/${selected.key.slice(CREDIT_CARD_KEY_PREFIX.length)}`
+                      : `/holdings/${encodeURIComponent(selected.key)}`
+                  }
+                  className="text-foreground hover:bg-muted/60 border-border/60 flex items-center justify-between rounded-lg border px-3 py-2.5 text-sm font-medium"
+                >
+                  {t("holdings:view_details")}
+                  <Icons.ArrowRight className="size-4" />
+                </Link>
+              )}
 
               {/* Items rolled into this category */}
               {selected.children.length > 0 && (
