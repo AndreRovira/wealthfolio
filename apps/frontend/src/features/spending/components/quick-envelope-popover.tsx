@@ -87,7 +87,17 @@ export interface QuickEnvelopePopoverProps {
    * envelopes (money they already counted, such as an expected credit).
    */
   isIncome?: boolean;
+  /** The account's meta: one kept out of the envelopes shows no pot. */
+  accountMeta?: string | null;
   className?: string;
+}
+
+function skipsEnvelopes(meta: string | null | undefined) {
+  try {
+    return meta ? JSON.parse(meta).envelopesExcluded === true : false;
+  } catch {
+    return false;
+  }
 }
 
 /** Which pot a transaction draws from: the category's link by default, or a pin. */
@@ -97,6 +107,7 @@ export function QuickEnvelopePopover({
   metadata,
   isExpense,
   isIncome = false,
+  accountMeta,
   className,
 }: QuickEnvelopePopoverProps) {
   const { t } = useTranslation();
@@ -139,7 +150,7 @@ export function QuickEnvelopePopover({
     onError: () => toast.error(t("spending:envelopes.pinFailed")),
   });
 
-  if (!isExpense && !isIncome) return null;
+  if ((!isExpense && !isIncome) || skipsEnvelopes(accountMeta)) return null;
 
   const choose = (envelope: ActivityEnvelope | null) => {
     save.mutate(envelope);
@@ -187,7 +198,10 @@ export function QuickEnvelopePopover({
                 )}
                 {(isIncome ? !excluded : !pin) && <Icons.Check className="ms-auto h-3.5 w-3.5" />}
               </CommandItem>
-              <CommandItem value="__none" onSelect={() => choose({ envelopeId: null, billId: null })}>
+              <CommandItem
+                value="__none"
+                onSelect={() => choose({ envelopeId: null, billId: null })}
+              >
                 <Icons.X className="me-2 h-3.5 w-3.5" />
                 {t("spending:envelopes.noPot")}
                 {excluded && <Icons.Check className="ms-auto h-3.5 w-3.5" />}

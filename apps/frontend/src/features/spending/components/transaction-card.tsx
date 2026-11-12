@@ -286,10 +286,11 @@ function TransactionCardImpl({
                 metadata={a.metadata}
                 isExpense={isOutflow && !isNeutral}
                 isIncome={isIncome}
+                accountMeta={account?.meta}
                 className="-mx-1 min-w-0"
               />
               {a.metadata?.fxPending === true && (
-                <span className="bg-warning/15 text-warning shrink-0 rounded px-1 py-px text-2xs">
+                <span className="bg-warning/15 text-warning text-2xs shrink-0 rounded px-1 py-px">
                   {t("spending:cashForm.fxPendingBadge")}
                 </span>
               )}

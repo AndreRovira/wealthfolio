@@ -251,10 +251,11 @@ function TransactionRowImpl({
           metadata={a.metadata}
           isExpense={isOutflow && !isNeutral}
           isIncome={isIncome}
+          accountMeta={account?.meta}
           className="-mx-1 mt-0.5 flex"
         />
         {a.metadata?.fxPending === true && (
-          <span className="bg-warning/15 text-warning mt-0.5 inline-block rounded px-1 py-px text-2xs">
+          <span className="bg-warning/15 text-warning text-2xs mt-0.5 inline-block rounded px-1 py-px">
             {t("spending:cashForm.fxPendingBadge")}
           </span>
         )}

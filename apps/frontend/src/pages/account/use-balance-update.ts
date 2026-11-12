@@ -1,7 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createActivity } from "@/adapters";
 import { assignActivityCategory } from "@/features/spending/adapters/cash-activities";
-import { applyIncome, getEnvelopeSnapshot } from "@/features/spending/adapters/envelopes";
 import { DECIMAL_PRECISION } from "@/lib/constants";
 import { ActivityCreate } from "@/lib/types";
 import { toast } from "@wealthfolio/ui/components/ui/use-toast";
@@ -64,32 +63,8 @@ export const useBalanceUpdate = (accountId: string) => {
         await assignActivityCategory(created.id, "income_sources", "cat_income_interest").catch(
           () => undefined,
         );
-        // The income rule already says where interest goes: apply its split
-        // here, so the deposit does not wait on the envelopes page for a click.
-        // Only a split that hands out exactly this deposit: a rule with fixed
-        // lines would fund them in full out of a few cents of interest. That
-        // one, like any failure, stays pending there, as it did before.
-        try {
-          const pending = (await getEnvelopeSnapshot()).pendingIncome.find(
-            (p) => p.activityId === created.id,
-          );
-          const handsOutDeposit =
-            pending?.proposed.every((line) => line.amount >= 0) &&
-            Math.abs(
-              pending.proposed.reduce((sum, line) => sum + line.amount, 0) - pending.amount,
-            ) < 0.01;
-          if (pending && handsOutDeposit) {
-            await applyIncome({
-              ruleId: pending.ruleId,
-              activityId: pending.activityId,
-              entryDate: pending.date,
-              splits: pending.proposed,
-            });
-            void queryClient.invalidateQueries({ queryKey: ["spending_envelopes"] });
-          }
-        } catch {
-          // left pending
-        }
+        // The server funds it by its income rule on the next envelopes read.
+        void queryClient.invalidateQueries({ queryKey: ["spending_envelopes"] });
       }
       if (activityType === "REVALUATION" && created?.id) {
         await assignActivityCategory(

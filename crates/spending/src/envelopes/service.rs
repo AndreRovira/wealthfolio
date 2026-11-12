@@ -41,6 +41,9 @@ pub struct EnvelopeService {
     spending_settings: Arc<SpendingSettingsService>,
     taxonomy_service: Arc<dyn TaxonomyServiceTrait>,
     fx_service: Arc<dyn wealthfolio_core::fx::FxServiceTrait>,
+    /// Held while a deposit is checked and funded: two snapshots read at
+    /// once would both see it unfunded and fund it twice.
+    funding: tokio::sync::Mutex<()>,
 }
 
 /// (envelope_id, bill_id) — the pot an amount lands in.
@@ -186,6 +189,7 @@ impl EnvelopeService {
             spending_settings,
             taxonomy_service,
             fx_service,
+            funding: tokio::sync::Mutex::new(()),
         }
     }
 
@@ -425,6 +429,7 @@ impl EnvelopeService {
             .into_iter()
             .find(|r| r.id == input.rule_id)
             .ok_or_else(|| anyhow!("rule {} not found", input.rule_id))?;
+        let _funding = self.funding.lock().await;
         let existing = self.repo.list_entries(None, None).await?;
         if existing
             .iter()
@@ -579,7 +584,33 @@ impl EnvelopeService {
         currency: &str,
         timezone: &str,
     ) -> Result<EnvelopeSnapshot> {
-        self.read(as_of, currency, timezone, None).await
+        let snapshot = self.read(as_of, currency, timezone, None).await?;
+        // Today's view funds the deposits whose rule hands out exactly what
+        // came in. One that would take money out of a pot, or leave part of
+        // the deposit unassigned, waits for the user.
+        let today = activity_date_in_user_timezone(Utc::now(), timezone);
+        let mut funded = false;
+        for income in snapshot
+            .pending_income
+            .iter()
+            .filter(|p| snapshot.as_of == today && hands_out_deposit(p))
+        {
+            let input = ApplyIncomeInput {
+                rule_id: income.rule_id.clone(),
+                activity_id: income.activity_id.clone(),
+                entry_date: income.date,
+                splits: income.proposed.clone(),
+            };
+            // A refusal (funded meanwhile by another read) leaves it as it is.
+            match self.apply_income(input).await {
+                Ok(_) => funded = true,
+                Err(e) => log::warn!("income {} not funded: {e}", income.activity_id),
+            }
+        }
+        if funded {
+            return self.read(as_of, currency, timezone, None).await;
+        }
+        Ok(snapshot)
     }
 
     /// The snapshot under the stored links, or under `links` to measure what
@@ -1498,6 +1529,13 @@ pub fn compute_splits(
     let fixed: Decimal = splits.iter().filter_map(|s| s.amount).map(dec).sum();
     let gap = amount - fixed;
     let remainder = gap.max(Decimal::ZERO);
+    let shares: Decimal = splits
+        .iter()
+        .filter(|s| s.amount.is_none())
+        .filter_map(|s| s.percent)
+        .map(dec)
+        .sum();
+    let (mut shares_left, mut unshared) = (shares, remainder);
     let mut out: Vec<ProposedSplit> = Vec::new();
     let mut add = |envelope_id: &str, bill_id: Option<&str>, value: Decimal| {
         if let Some(row) = out
@@ -1516,7 +1554,18 @@ pub fn compute_splits(
     for s in splits {
         let value = match (s.amount, s.percent) {
             (Some(a), _) => dec(a),
-            (None, Some(p)) => (remainder * dec(p) / Decimal::from(100)).round_dp(2),
+            (None, Some(p)) => {
+                shares_left -= dec(p);
+                // The line that completes 100% takes what is left, so the
+                // cents add up to the deposit.
+                let value = if shares == Decimal::ONE_HUNDRED && shares_left.is_zero() {
+                    unshared
+                } else {
+                    (remainder * dec(p) / Decimal::ONE_HUNDRED).round_dp(2)
+                };
+                unshared -= value;
+                value
+            }
             (None, None) => Decimal::ZERO,
         };
         add(&s.envelope_id, s.bill_id.as_deref(), value);
@@ -1527,6 +1576,18 @@ pub fn compute_splits(
         }
     }
     out
+}
+
+/// True when the proposal gives every cent of the deposit to a pot and takes
+/// nothing out of one.
+fn hands_out_deposit(income: &PendingIncome) -> bool {
+    income.proposed.iter().all(|s| s.amount >= 0.0)
+        && income
+            .proposed
+            .iter()
+            .map(|s| dec(s.amount).round_dp(2))
+            .sum::<Decimal>()
+            == dec(income.amount).round_dp(2)
 }
 
 /// Candidate dates per month from the anchor's month up to `as_of`, keeping
@@ -1752,6 +1813,40 @@ mod tests {
         // Without a shortfall envelope the old clamp stays.
         let clamp = compute_splits(&splits, Decimal::from(13_000), None);
         assert_eq!(clamp[1].amount, 8000.0);
+        // A surplus with an odd cent: the last share takes what is left.
+        let odd = compute_splits(&splits, dec(15_000.0 + 2434.55), Some("disc"));
+        assert_eq!(odd[0].amount, 8217.28);
+        assert_eq!(odd[1].amount, 9217.27);
+    }
+
+    #[test]
+    fn only_a_split_that_hands_out_the_deposit_funds_by_itself() {
+        let income = |amount: f64, lines: &[f64]| PendingIncome {
+            activity_id: "a".into(),
+            date: NaiveDate::from_ymd_opt(2026, 11, 12).unwrap(),
+            amount,
+            category_id: "cat".into(),
+            rule_id: "r".into(),
+            rule_name: "r".into(),
+            proposed: lines
+                .iter()
+                .enumerate()
+                .map(|(i, amount)| ProposedSplit {
+                    envelope_id: i.to_string(),
+                    bill_id: None,
+                    amount: *amount,
+                })
+                .collect(),
+        };
+        assert!(hands_out_deposit(&income(
+            27_255.18,
+            &[8976.85, 8234.16, 10_044.17]
+        )));
+        // Fixed lines larger than a few cents of interest: part of it is not there.
+        assert!(!hands_out_deposit(&income(1.65, &[500.0, 300.0])));
+        // A shortfall deeper than its envelope's line would take money out.
+        assert!(!hands_out_deposit(&income(100.0, &[500.0, -400.0])));
+        assert!(!hands_out_deposit(&income(100.0, &[])));
     }
 
     #[test]
