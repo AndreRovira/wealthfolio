@@ -1205,7 +1205,8 @@
       "surplus": "Surplus goes to",
       "shortfall": "Shortfall from",
       "none": "None"
-    }
+    },
+    "missingFx": "{{count}} foreign-currency movements ({{currencies}}) have no exchange rate and are not counted in any envelope."
   },
   "savingsPlan": {
     "title": "Savings plan",

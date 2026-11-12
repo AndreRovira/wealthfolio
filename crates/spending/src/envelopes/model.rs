@@ -334,6 +334,8 @@ pub struct EnvelopeSnapshot {
     pub rules: Vec<FundingRule>,
     pub pending_income: Vec<PendingIncome>,
     pub total_balance: f64,
+    /// Foreign-currency flows left out because no rate was found.
+    pub quality: crate::fx::CalculationQuality,
 }
 
 /// Apply an on-income rule to one deposit with the final amounts.

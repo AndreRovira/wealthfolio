@@ -49,15 +49,25 @@ async fn update_envelope(
     Path(id): Path<String>,
     Json(input): Json<EnvelopeInput>,
 ) -> ApiResult<Json<Envelope>> {
+    let base = state.base_currency()?;
+    let timezone = state.timezone()?;
     Ok(Json(
-        state.envelope_service.update_envelope(&id, input).await?,
+        state
+            .envelope_service
+            .update_envelope(&id, input, &base, &timezone)
+            .await?,
     ))
 }
 async fn delete_envelope(
     axum::Extension(state): axum::Extension<Arc<AppState>>,
     Path(id): Path<String>,
 ) -> ApiResult<()> {
-    state.envelope_service.delete_envelope(&id).await?;
+    let base = state.base_currency()?;
+    let timezone = state.timezone()?;
+    state
+        .envelope_service
+        .delete_envelope(&id, &base, &timezone)
+        .await?;
     Ok(())
 }
 
@@ -97,7 +107,12 @@ async fn replace_links(
     Path(id): Path<String>,
     Json(links): Json<Vec<EnvelopeCategoryLink>>,
 ) -> ApiResult<()> {
-    state.envelope_service.replace_links(&id, links).await?;
+    let base = state.base_currency()?;
+    let timezone = state.timezone()?;
+    state
+        .envelope_service
+        .replace_links(&id, links, &base, &timezone)
+        .await?;
     Ok(())
 }
 

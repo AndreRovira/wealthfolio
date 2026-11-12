@@ -185,6 +185,27 @@ impl EnvelopeRepository {
     }
 }
 
+fn entry_rows(entries: Vec<NewEnvelopeEntry>) -> Vec<EntryDB> {
+    let ts = now();
+    entries
+        .into_iter()
+        .map(|e| EntryDB {
+            id: Uuid::new_v4().to_string(),
+            envelope_id: e.envelope_id,
+            bill_id: e.bill_id,
+            entry_date: e.entry_date.to_string(),
+            amount: amount_str(e.amount),
+            kind: e.kind.as_str().to_string(),
+            note: e.note,
+            move_id: e.move_id,
+            rule_id: e.rule_id,
+            period_key: e.period_key,
+            activity_id: e.activity_id,
+            created_at: ts.clone(),
+        })
+        .collect()
+}
+
 #[async_trait]
 impl EnvelopeRepositoryTrait for EnvelopeRepository {
     async fn list_envelopes(&self) -> Result<Vec<Envelope>> {
@@ -386,6 +407,43 @@ impl EnvelopeRepositoryTrait for EnvelopeRepository {
             .map_err(err)
     }
 
+    async fn settle_bill(
+        &self,
+        id: &str,
+        from: NaiveDate,
+        to: NaiveDate,
+        sweep: Vec<NewEnvelopeEntry>,
+    ) -> Result<bool> {
+        let id = id.to_string();
+        let rows = entry_rows(sweep);
+        self.writer
+            .exec(move |conn| {
+                let settled = diesel::update(
+                    envelope_bills::table
+                        .find(&id)
+                        .filter(envelope_bills::next_due.eq(from.to_string())),
+                )
+                .set((
+                    envelope_bills::next_due.eq(to.to_string()),
+                    envelope_bills::updated_at.eq(now()),
+                ))
+                .execute(conn)
+                .map_err(StorageError::from)?
+                    == 1;
+                if settled {
+                    for row in &rows {
+                        diesel::insert_into(envelope_entries::table)
+                            .values(row)
+                            .execute(conn)
+                            .map_err(StorageError::from)?;
+                    }
+                }
+                Ok(settled)
+            })
+            .await
+            .map_err(err)
+    }
+
     async fn delete_bill(&self, id: &str) -> Result<()> {
         let id = id.to_string();
         self.writer
@@ -482,24 +540,7 @@ impl EnvelopeRepositoryTrait for EnvelopeRepository {
     }
 
     async fn insert_entries(&self, entries: Vec<NewEnvelopeEntry>) -> Result<Vec<EnvelopeEntry>> {
-        let ts = now();
-        let rows = entries
-            .into_iter()
-            .map(|e| EntryDB {
-                id: Uuid::new_v4().to_string(),
-                envelope_id: e.envelope_id,
-                bill_id: e.bill_id,
-                entry_date: e.entry_date.to_string(),
-                amount: amount_str(e.amount),
-                kind: e.kind.as_str().to_string(),
-                note: e.note,
-                move_id: e.move_id,
-                rule_id: e.rule_id,
-                period_key: e.period_key,
-                activity_id: e.activity_id,
-                created_at: ts.clone(),
-            })
-            .collect::<Vec<_>>();
+        let rows = entry_rows(entries);
         let out = rows.clone();
         self.writer
             .exec(move |conn| {
@@ -704,5 +745,67 @@ mod tests {
                 bill_id: None,
             }]
         );
+    }
+
+    #[tokio::test]
+    async fn a_bill_settles_once_and_takes_its_sweep_along() {
+        let dir = TestDir::new();
+        let db_path = dir
+            .path()
+            .join("envelopes.db")
+            .to_string_lossy()
+            .to_string();
+        run_migrations(&db_path).unwrap();
+        let pool = create_pool(&db_path).unwrap();
+        let writer = spawn_writer((*pool).clone()).unwrap();
+        let repo = EnvelopeRepository::new(pool, writer);
+
+        let envelope = repo
+            .create_envelope(EnvelopeInput {
+                name: "Bills".into(),
+                color: None,
+                icon: None,
+                sort_order: None,
+                allow_negative: None,
+                start_date: None,
+                archived: None,
+            })
+            .await
+            .unwrap();
+        let day = |d| NaiveDate::from_ymd_opt(2026, 11, d).unwrap();
+        let bill = repo
+            .create_bill(EnvelopeBillInput {
+                envelope_id: envelope.id.clone(),
+                name: "Rent".into(),
+                expected_amount: Some(100.0),
+                due_day: None,
+                cycle: None,
+                sort_order: None,
+                archived: None,
+                next_due: Some(day(5)),
+            })
+            .await
+            .unwrap();
+        let sweep = || {
+            vec![NewEnvelopeEntry {
+                envelope_id: envelope.id.clone(),
+                entry_date: day(4),
+                amount: 12.5,
+                ..Default::default()
+            }]
+        };
+
+        assert!(repo
+            .settle_bill(&bill.id, day(5), day(28), sweep())
+            .await
+            .unwrap());
+        // A second reader that still saw the 5th writes nothing.
+        assert!(!repo
+            .settle_bill(&bill.id, day(5), day(28), sweep())
+            .await
+            .unwrap());
+
+        assert_eq!(repo.list_bills().await.unwrap()[0].next_due, Some(day(28)));
+        assert_eq!(repo.list_entries(None, None).await.unwrap().len(), 1);
     }
 }

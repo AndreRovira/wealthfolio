@@ -17,6 +17,16 @@ pub trait EnvelopeRepositoryTrait: Send + Sync {
     async fn delete_bill(&self, id: &str) -> Result<()>;
     /// Move a bill's next due date (payment registered or marked by hand).
     async fn set_bill_next_due(&self, id: &str, next_due: Option<NaiveDate>) -> Result<()>;
+    /// Move a bill from due date `from` to `to` and write `sweep` with it, in
+    /// one transaction. False, with nothing written, when the bill is no
+    /// longer due on `from`: someone else settled it first.
+    async fn settle_bill(
+        &self,
+        id: &str,
+        from: NaiveDate,
+        to: NaiveDate,
+        sweep: Vec<NewEnvelopeEntry>,
+    ) -> Result<bool>;
 
     async fn list_links(&self) -> Result<Vec<EnvelopeCategoryLink>>;
     /// Replace every link that points at `envelope_id` with `links`.

@@ -1268,7 +1268,8 @@
       "surplus": "Excedente va a",
       "shortfall": "Faltante sale de",
       "none": "Ninguno"
-    }
+    },
+    "missingFx": "{{count}} movimientos en otra moneda ({{currencies}}) no tienen tipo de cambio y no cuentan en ningún sobre."
   },
   "savingsPlan": {
     "title": "Plan de ahorro",

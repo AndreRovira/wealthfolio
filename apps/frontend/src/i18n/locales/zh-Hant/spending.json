@@ -1205,7 +1205,8 @@
       "surplus": "結餘分配至",
       "shortfall": "不足扣自",
       "none": "無"
-    }
+    },
+    "missingFx": "有 {{count}} 筆外幣交易（{{currencies}}）缺少匯率，未計入任何信封。"
   },
   "savingsPlan": {
     "title": "儲蓄計畫",

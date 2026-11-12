@@ -87,7 +87,8 @@ export interface MoveInput {
   note?: string | null;
 }
 
-export type FundingCadence = "biweekly" | "semimonthly" | "monthly" | "on_income";
+export type FundingCadence =
+  "biweekly" | "semimonthly" | "monthly" | "on_income";
 
 export interface FundingSplit {
   envelopeId: string;
@@ -183,6 +184,8 @@ export interface EnvelopeSnapshot {
   rules: FundingRule[];
   pendingIncome: PendingIncome[];
   totalBalance: number;
+  /** Foreign-currency flows left out of the pots because no rate was found. */
+  quality: { missingFxTransactions: number; missingFxCurrencies: string[] };
 }
 
 export interface ApplyIncomeInput {

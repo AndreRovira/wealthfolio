@@ -22,6 +22,7 @@ use crate::activity_classification::{
     SpendingClassification,
 };
 use crate::activity_splits::ActivitySplitRepositoryTrait;
+use crate::fx::CalculationQuality;
 use crate::settings::SpendingSettingsService;
 
 const SPENDING_TAXONOMY: &str = "spending_categories";
@@ -46,17 +47,22 @@ pub struct EnvelopeService {
 type PotKey = (String, Option<String>);
 
 /// Spend per pot, spend per envelope this month, spend per envelope this
-/// quincena, income deposits, latest payment date per bill pot.
+/// quincena, income deposits, every dated flow of each bill pot, and the
+/// conversions that found no rate.
 type Flows = (
     HashMap<PotKey, Decimal>,
     HashMap<String, Decimal>,
     HashMap<String, Decimal>,
     Vec<(String, NaiveDate, String, Decimal)>,
-    HashMap<PotKey, NaiveDate>,
+    HashMap<PotKey, Vec<(NaiveDate, Decimal)>>,
+    CalculationQuality,
 );
 
 /// A payment this many days before the due date still settles that due date.
 const PAYMENT_WINDOW_DAYS: i64 = 10;
+/// Share of the expected amount the charges near a due date must reach to
+/// count as its payment; a fee or a partial charge below it settles nothing.
+const PAYMENT_MIN_SHARE: f64 = 0.5;
 
 /// Boolean flag stored in an account's JSON `meta`.
 pub fn account_flag(meta: Option<&str>, key: &str) -> bool {
@@ -192,12 +198,46 @@ impl EnvelopeService {
         require_name(&input.name)?;
         self.repo.create_envelope(input).await
     }
-    pub async fn update_envelope(&self, id: &str, input: EnvelopeInput) -> Result<Envelope> {
+    pub async fn update_envelope(
+        &self,
+        id: &str,
+        input: EnvelopeInput,
+        currency: &str,
+        timezone: &str,
+    ) -> Result<Envelope> {
         require_name(&input.name)?;
+        if input.archived == Some(true) {
+            self.require_unused(id, currency, timezone).await?;
+        }
         self.repo.update_envelope(id, input).await
     }
-    pub async fn delete_envelope(&self, id: &str) -> Result<()> {
+    pub async fn delete_envelope(&self, id: &str, currency: &str, timezone: &str) -> Result<()> {
+        self.require_unused(id, currency, timezone).await?;
         self.repo.delete_envelope(id).await
+    }
+    /// An envelope leaves only once it is empty and no rule funds it: its
+    /// ledger goes with it, and a rule line would keep paying into nothing.
+    async fn require_unused(&self, id: &str, currency: &str, timezone: &str) -> Result<()> {
+        let snapshot = self.snapshot(None, currency, timezone).await?;
+        if let Some(row) = snapshot.envelopes.iter().find(|e| e.envelope.id == id) {
+            if row.balance.abs() >= 0.01 {
+                return Err(anyhow!(
+                    "{} still holds {:.2}: move it to another envelope first",
+                    row.envelope.name,
+                    row.balance
+                ));
+            }
+        }
+        match snapshot.rules.iter().find(|r| {
+            r.shortfall_envelope_id.as_deref() == Some(id)
+                || r.splits.iter().any(|s| s.envelope_id == id)
+        }) {
+            Some(rule) => Err(anyhow!(
+                "rule \"{}\" still funds this envelope: remove its line first",
+                rule.name
+            )),
+            None => Ok(()),
+        }
     }
 
     pub async fn list_bills(&self) -> Result<Vec<EnvelopeBill>> {
@@ -215,6 +255,19 @@ impl EnvelopeService {
         if let Some(cycle) = &input.cycle {
             require_cycle(cycle)?;
         }
+        // The pot is (envelope, bill): entries and pins filed under the old
+        // envelope would not follow the bill to a new one.
+        if self
+            .repo
+            .list_bills()
+            .await?
+            .iter()
+            .any(|b| b.id == id && b.envelope_id != input.envelope_id)
+        {
+            return Err(anyhow!(
+                "a bill stays in its envelope: create it in the other one and move the money"
+            ));
+        }
         self.repo.update_bill(id, input).await
     }
     pub async fn delete_bill(&self, id: &str) -> Result<()> {
@@ -224,13 +277,47 @@ impl EnvelopeService {
     pub async fn list_links(&self) -> Result<Vec<EnvelopeCategoryLink>> {
         self.repo.list_links().await
     }
+    /// A category that already fed another pot keeps its past spend there:
+    /// both pots get an adjustment for the history that changed sides, so no
+    /// balance moves and only spend from now on lands in the new pot. A
+    /// category linked for the first time brings its history, as before.
     pub async fn replace_links(
         &self,
         envelope_id: &str,
         links: Vec<EnvelopeCategoryLink>,
+        currency: &str,
+        timezone: &str,
     ) -> Result<()> {
         if links.iter().any(|l| l.envelope_id != envelope_id) {
             return Err(anyhow!("every link must point at envelope {envelope_id}"));
+        }
+        let before = self.repo.list_links().await?;
+        let mut categories = self.taxonomy_categories(SPENDING_TAXONOMY)?;
+        categories.extend(self.taxonomy_categories(SAVINGS_TAXONOMY)?);
+        let meta: HashMap<String, Category> =
+            categories.into_iter().map(|c| (c.id.clone(), c)).collect();
+        let moved = moved_links(&before, &links, &meta);
+        if moved.is_empty() {
+            return self.repo.replace_links(envelope_id, links).await;
+        }
+        // First the moves alone, measured by what each pot's spend becomes;
+        // then the rest of the edit (first links, removals), which adjusts nothing.
+        let moves_only = before
+            .iter()
+            .filter(|b| {
+                b.envelope_id == envelope_id
+                    && !moved.iter().any(|m| m.category_id == b.category_id)
+            })
+            .cloned()
+            .chain(moved.iter().cloned())
+            .collect();
+        let spent_before = pot_spend(&self.snapshot(None, currency, timezone).await?);
+        self.repo.replace_links(envelope_id, moves_only).await?;
+        let spent_after = pot_spend(&self.snapshot(None, currency, timezone).await?);
+        let today = activity_date_in_user_timezone(Utc::now(), timezone);
+        let adjustments = relink_adjustments(&spent_before, &spent_after, today);
+        if !adjustments.is_empty() {
+            self.repo.insert_entries(adjustments).await?;
         }
         self.repo.replace_links(envelope_id, links).await
     }
@@ -501,17 +588,6 @@ impl EnvelopeService {
             clamp_day(as_of.year(), as_of.month(), 16)
         };
         let period_target = period_targets(&rules);
-        let mut funded: HashMap<PotKey, Decimal> = HashMap::new();
-        let mut funded_month: HashMap<String, Decimal> = HashMap::new();
-        for e in entries.iter().filter(|e| e.entry_date <= as_of) {
-            let amount = dec(e.amount);
-            *funded
-                .entry((e.envelope_id.clone(), e.bill_id.clone()))
-                .or_default() += amount;
-            if e.entry_date >= month_start {
-                *funded_month.entry(e.envelope_id.clone()).or_default() += amount;
-            }
-        }
 
         // Savings categories sit beside the spending ones: a move to an
         // investing account picks its pot through a savings category.
@@ -528,7 +604,7 @@ impl EnvelopeService {
             .map(|e| (e.id.as_str(), e.start_date))
             .collect();
 
-        let (spent, spent_month, spent_period, income_by_activity, last_paid) = self
+        let (spent, spent_month, spent_period, income_by_activity, bill_flows, quality) = self
             .collect_flows(
                 &envelopes,
                 as_of,
@@ -544,18 +620,75 @@ impl EnvelopeService {
 
         // A registered payment settles the due date it falls near and moves
         // the bill to its next cycle; persisted so the state survives reloads.
+        // What the pot still holds on that day goes to the envelope the
+        // paycheck remainder feeds, so every cycle starts from zero.
+        let sweep_to = rules
+            .iter()
+            .filter(|r| r.active)
+            .flat_map(|r| &r.splits)
+            .find(|s| s.source.as_deref() == Some(SOURCE_REMAINDER) && s.bill_id.is_none())
+            .map(|s| s.envelope_id.clone())
+            .filter(|id| envelopes.iter().any(|e| &e.id == id && !e.archived));
         let mut bills = bills;
+        let mut swept = false;
         for bill in bills.iter_mut() {
             let key = (bill.envelope_id.clone(), Some(bill.id.clone()));
-            let (Some(paid), Some(next)) = (last_paid.get(&key), bill.next_due) else {
+            let (Some(flows), Some(next)) = (bill_flows.get(&key), bill.next_due) else {
                 continue;
             };
-            let advanced = advance_due(next, cycle_months(&bill.cycle), *paid);
-            if advanced != next {
-                self.repo
-                    .set_bill_next_due(&bill.id, Some(advanced))
-                    .await?;
-                bill.next_due = Some(advanced);
+            let Some(paid) = settling_payment(dec(bill.expected_amount), next, flows) else {
+                continue;
+            };
+            let advanced = advance_due(next, cycle_months(&bill.cycle), paid);
+            if advanced == next {
+                continue;
+            }
+            let leftover = entries
+                .iter()
+                .filter(|e| {
+                    e.envelope_id == bill.envelope_id
+                        && e.bill_id.as_deref() == Some(&bill.id)
+                        && e.entry_date <= paid
+                })
+                .map(|e| dec(e.amount))
+                .sum::<Decimal>()
+                - flows
+                    .iter()
+                    .filter(|(date, _)| *date <= paid)
+                    .map(|(_, amount)| *amount)
+                    .sum::<Decimal>();
+            let sweep = match &sweep_to {
+                Some(to) if leftover >= Decimal::new(1, 2) => {
+                    sweep_entries(bill, to, paid, round_half_up(leftover))
+                }
+                _ => Vec::new(),
+            };
+            let moved = !sweep.is_empty();
+            // Only the snapshot that still finds the old due date writes, so
+            // two concurrent reads cannot sweep the same leftover twice.
+            if self
+                .repo
+                .settle_bill(&bill.id, next, advanced, sweep)
+                .await?
+            {
+                swept |= moved;
+            }
+            bill.next_due = Some(advanced);
+        }
+        let entries = if swept {
+            self.repo.list_entries(None, None).await?
+        } else {
+            entries
+        };
+        let mut funded: HashMap<PotKey, Decimal> = HashMap::new();
+        let mut funded_month: HashMap<String, Decimal> = HashMap::new();
+        for e in entries.iter().filter(|e| e.entry_date <= as_of) {
+            let amount = dec(e.amount);
+            *funded
+                .entry((e.envelope_id.clone(), e.bill_id.clone()))
+                .or_default() += amount;
+            if e.entry_date >= month_start {
+                *funded_month.entry(e.envelope_id.clone()).or_default() += amount;
             }
         }
 
@@ -586,7 +719,13 @@ impl EnvelopeService {
                             .filter(|l| l.bill_id.as_deref() == Some(&bill.id))
                             .map(|l| l.category_id.clone())
                             .collect(),
-                        last_payment: last_paid.get(&key).copied(),
+                        last_payment: bill_flows.get(&key).and_then(|flows| {
+                            flows
+                                .iter()
+                                .filter(|(_, amount)| *amount > Decimal::ZERO)
+                                .map(|(date, _)| *date)
+                                .max()
+                        }),
                         state,
                         days_left,
                         bill,
@@ -681,6 +820,7 @@ impl EnvelopeService {
             rules,
             pending_income,
             total_balance: f64_of(total),
+            quality,
         })
     }
 
@@ -799,16 +939,31 @@ impl EnvelopeService {
         start_by_envelope: &HashMap<&str, NaiveDate>,
     ) -> Result<Flows> {
         let mut spent: HashMap<PotKey, Decimal> = HashMap::new();
-        let mut last_paid: HashMap<PotKey, NaiveDate> = HashMap::new();
+        let mut bill_flows: HashMap<PotKey, Vec<(NaiveDate, Decimal)>> = HashMap::new();
+        let mut quality = CalculationQuality::default();
         let mut spent_month: HashMap<String, Decimal> = HashMap::new();
         let mut spent_period: HashMap<String, Decimal> = HashMap::new();
         let mut income = Vec::new();
         let settings = self.spending_settings.get().await?;
         let Some(earliest) = envelopes.iter().map(|e| e.start_date).min() else {
-            return Ok((spent, spent_month, spent_period, income, last_paid));
+            return Ok((
+                spent,
+                spent_month,
+                spent_period,
+                income,
+                bill_flows,
+                quality,
+            ));
         };
         if !settings.enabled || settings.account_ids.is_empty() {
-            return Ok((spent, spent_month, spent_period, income, last_paid));
+            return Ok((
+                spent,
+                spent_month,
+                spent_period,
+                income,
+                bill_flows,
+                quality,
+            ));
         }
         let accounts = self
             .account_repo
@@ -830,7 +985,14 @@ impl EnvelopeService {
             .map(|a| (a.id, a.account_type))
             .collect();
         if account_types.is_empty() {
-            return Ok((spent, spent_month, spent_period, income, last_paid));
+            return Ok((
+                spent,
+                spent_month,
+                spent_period,
+                income,
+                bill_flows,
+                quality,
+            ));
         }
         // One day of slack on both ends; the local date decides membership.
         let start_utc = Utc.from_utc_datetime(
@@ -922,14 +1084,19 @@ impl EnvelopeService {
                 {
                     continue;
                 }
-                let converted = crate::fx::convert(fx, native, &activity.currency, currency, as_of)
-                    .unwrap_or(Decimal::ZERO);
-                if converted > Decimal::ZERO && bill_id.is_some() {
-                    let key = (envelope_id.clone(), bill_id.clone());
-                    let latest = last_paid.entry(key).or_insert(local_date);
-                    if local_date > *latest {
-                        *latest = local_date;
-                    }
+                // The rate of the day the money moved: one read today would
+                // shift every past charge with the currency.
+                let converted =
+                    crate::fx::convert(fx, native, &activity.currency, currency, local_date)
+                        .unwrap_or_else(|| {
+                            quality.record_missing(&activity.currency);
+                            Decimal::ZERO
+                        });
+                if converted != Decimal::ZERO && bill_id.is_some() {
+                    bill_flows
+                        .entry((envelope_id.clone(), bill_id.clone()))
+                        .or_default()
+                        .push((local_date, converted));
                 }
                 *spent.entry((envelope_id.clone(), bill_id)).or_default() += converted;
                 if local_date >= month_start {
@@ -952,9 +1119,12 @@ impl EnvelopeService {
                         allocation.amount,
                         &activity.currency,
                         currency,
-                        as_of,
+                        local_date,
                     )
-                    .unwrap_or(Decimal::ZERO);
+                    .unwrap_or_else(|| {
+                        quality.record_missing(&activity.currency);
+                        Decimal::ZERO
+                    });
                     income.push((
                         activity.id.clone(),
                         local_date,
@@ -964,7 +1134,14 @@ impl EnvelopeService {
                 }
             }
         }
-        Ok((spent, spent_month, spent_period, income, last_paid))
+        Ok((
+            spent,
+            spent_month,
+            spent_period,
+            income,
+            bill_flows,
+            quality,
+        ))
     }
 
     fn taxonomy_categories(&self, taxonomy_id: &str) -> Result<Vec<Category>> {
@@ -1020,6 +1197,117 @@ pub fn advance_due(mut next_due: NaiveDate, months: u32, paid: NaiveDate) -> Nai
         next_due = add_months(next_due, months);
     }
     next_due
+}
+
+/// The new links whose category, by itself or through a parent, fed a
+/// different pot until now.
+fn moved_links(
+    before: &[EnvelopeCategoryLink],
+    links: &[EnvelopeCategoryLink],
+    meta: &HashMap<String, Category>,
+) -> Vec<EnvelopeCategoryLink> {
+    let by_category: HashMap<&str, &EnvelopeCategoryLink> =
+        before.iter().map(|l| (l.category_id.as_str(), l)).collect();
+    links
+        .iter()
+        .filter(|l| {
+            resolve_link(&l.category_id, &by_category, meta)
+                .is_some_and(|was| (&was.envelope_id, &was.bill_id) != (&l.envelope_id, &l.bill_id))
+        })
+        .cloned()
+        .collect()
+}
+
+/// Spend per pot as the snapshot reports it; the envelope's own pot is what
+/// its bills do not account for.
+fn pot_spend(snapshot: &EnvelopeSnapshot) -> HashMap<PotKey, Decimal> {
+    let mut out = HashMap::new();
+    for row in &snapshot.envelopes {
+        let mut own = dec(row.spent);
+        for bill in &row.bills {
+            own -= dec(bill.spent);
+            out.insert(
+                (row.envelope.id.clone(), Some(bill.bill.id.clone())),
+                dec(bill.spent),
+            );
+        }
+        out.insert((row.envelope.id.clone(), None), own);
+    }
+    out
+}
+
+/// One adjustment per pot whose spend changed, for that change: the pot that
+/// lost history gives the money back, the one that gained it is made whole.
+fn relink_adjustments(
+    before: &HashMap<PotKey, Decimal>,
+    after: &HashMap<PotKey, Decimal>,
+    date: NaiveDate,
+) -> Vec<NewEnvelopeEntry> {
+    let mut pots: Vec<&PotKey> = before.keys().chain(after.keys()).collect();
+    pots.sort();
+    pots.dedup();
+    pots.into_iter()
+        .filter_map(|pot| {
+            let change = after.get(pot).copied().unwrap_or_default()
+                - before.get(pot).copied().unwrap_or_default();
+            (change.abs() >= Decimal::new(1, 2)).then(|| NewEnvelopeEntry {
+                envelope_id: pot.0.clone(),
+                bill_id: pot.1.clone(),
+                entry_date: date,
+                amount: f64_of(change),
+                kind: EnvelopeEntryKind::Adjustment,
+                note: Some("Category moved: its past spend stays where it was".into()),
+                ..Default::default()
+            })
+        })
+        .collect()
+}
+
+/// The date of the payment that settles `next_due`: the latest charge in its
+/// window, once the charges there (refunds netted) reach PAYMENT_MIN_SHARE of
+/// the expected amount. A bill with no expected amount settles on any charge.
+// ponytail: a second charge that lands after the first already settled the
+// bill leaves the pot negative until it is funded again; hold the sweep for
+// the window's end if bills ever get paid in parts.
+fn settling_payment(
+    expected: Decimal,
+    next_due: NaiveDate,
+    flows: &[(NaiveDate, Decimal)],
+) -> Option<NaiveDate> {
+    let window = next_due - Duration::days(PAYMENT_WINDOW_DAYS);
+    let near = || flows.iter().filter(|(date, _)| *date >= window);
+    let paid: Decimal = near().map(|(_, amount)| *amount).sum();
+    if paid <= Decimal::ZERO || paid < expected * dec(PAYMENT_MIN_SHARE) {
+        return None;
+    }
+    near()
+        .filter(|(_, amount)| *amount > Decimal::ZERO)
+        .map(|(date, _)| *date)
+        .max()
+}
+
+/// Both legs of the move that empties a settled bill's pot into `to`.
+fn sweep_entries(
+    bill: &EnvelopeBill,
+    to: &str,
+    date: NaiveDate,
+    amount: f64,
+) -> Vec<NewEnvelopeEntry> {
+    let move_id = Some(Uuid::new_v4().to_string());
+    let leg = |envelope_id: &str, bill_id: Option<String>, amount: f64| NewEnvelopeEntry {
+        envelope_id: envelope_id.to_string(),
+        bill_id,
+        entry_date: date,
+        amount,
+        kind: EnvelopeEntryKind::Move,
+        note: Some(format!("{}: leftover", bill.name)),
+        move_id: move_id.clone(),
+        ..Default::default()
+    };
+    vec![
+        leg(&bill.envelope_id, Some(bill.id.clone()), -amount),
+        leg(to, None, amount),
+    ]
 }
 
 /// What an activity takes out of a pot, and the taxonomy whose category picks
@@ -1176,17 +1464,12 @@ fn validate_rule(input: &FundingRuleInput) -> Result<()> {
                 return Err(anyhow!("percent splits add up to more than 100"));
             }
         }
+        // Funding by calendar re-funds past periods when a rule changes, and
+        // nothing uses it: every split follows a deposit.
         _ => {
-            if input.anchor_date.is_none() {
-                return Err(anyhow!("a scheduled rule needs an anchor date"));
-            }
-            if input
-                .splits
-                .iter()
-                .any(|s| s.amount.is_none() && s.source.is_none())
-            {
-                return Err(anyhow!("scheduled rules need fixed amounts on every line"));
-            }
+            return Err(anyhow!(
+                "only rules that split an income deposit are supported"
+            ))
         }
     }
     Ok(())
@@ -1577,10 +1860,15 @@ mod tests {
             ..Default::default()
         };
         assert!(validate_rule(&input(
-            FundingCadence::Semimonthly,
+            FundingCadence::OnIncome,
             sourced(Some("b"), None, SOURCE_BILL)
         ))
         .is_ok());
+        assert!(validate_rule(&input(
+            FundingCadence::Semimonthly,
+            sourced(Some("b"), None, SOURCE_BILL)
+        ))
+        .is_err());
         assert!(validate_rule(&input(
             FundingCadence::OnIncome,
             sourced(None, None, SOURCE_BILL)
@@ -1591,5 +1879,115 @@ mod tests {
             sourced(None, Some(50.0), SOURCE_REMAINDER)
         ))
         .is_err());
+    }
+
+    #[test]
+    fn a_bill_settles_on_a_real_payment_and_hands_over_its_leftover() {
+        let day = |d| NaiveDate::from_ymd_opt(2026, 11, d).unwrap();
+        let due = day(20);
+        // A fee on the bill's category is not its payment; half the amount is.
+        assert_eq!(
+            settling_payment(dec(1000.0), due, &[(day(12), dec(30.0))]),
+            None
+        );
+        assert_eq!(
+            settling_payment(
+                dec(1000.0),
+                due,
+                &[(day(12), dec(30.0)), (day(18), dec(900.0))]
+            ),
+            Some(day(18))
+        );
+        // A charge before the window belongs to the previous due date, and a
+        // refund takes back what it undid.
+        assert_eq!(
+            settling_payment(dec(1000.0), due, &[(day(9), dec(1000.0))]),
+            None
+        );
+        assert_eq!(
+            settling_payment(
+                dec(1000.0),
+                due,
+                &[(day(15), dec(900.0)), (day(16), dec(-900.0))]
+            ),
+            None
+        );
+        assert_eq!(
+            settling_payment(dec(0.0), due, &[(day(15), dec(5.0))]),
+            Some(day(15))
+        );
+
+        let bill = EnvelopeBill {
+            id: "b".into(),
+            envelope_id: "bills".into(),
+            name: "Internet".into(),
+            expected_amount: 1000.0,
+            due_day: None,
+            cycle: "monthly".into(),
+            sort_order: 0,
+            archived: false,
+            next_due: Some(due),
+        };
+        let legs = sweep_entries(&bill, "investment", day(18), 100.0);
+        let pot = |e: &NewEnvelopeEntry| (e.envelope_id.clone(), e.bill_id.clone(), e.amount);
+        assert_eq!(pot(&legs[0]), ("bills".into(), Some("b".into()), -100.0));
+        assert_eq!(pot(&legs[1]), ("investment".into(), None, 100.0));
+        assert!(legs[0].move_id.is_some() && legs[0].move_id == legs[1].move_id);
+        assert!(legs.iter().all(|e| e.entry_date == day(18)));
+    }
+
+    #[test]
+    fn a_moved_category_leaves_both_balances_where_they_were() {
+        let link = |category: &str, envelope: &str| EnvelopeCategoryLink {
+            category_id: category.into(),
+            envelope_id: envelope.into(),
+            bill_id: None,
+        };
+        let category = |id: &str, parent: Option<&str>| {
+            let c = Category {
+                id: id.into(),
+                taxonomy_id: SPENDING_TAXONOMY.into(),
+                parent_id: parent.map(Into::into),
+                name: id.into(),
+                key: id.into(),
+                color: String::new(),
+                description: None,
+                sort_order: 0,
+                created_at: Default::default(),
+                updated_at: Default::default(),
+                icon: None,
+            };
+            (c.id.clone(), c)
+        };
+        let meta: HashMap<String, Category> = [
+            category("food", None),
+            category("coffee", Some("food")),
+            category("gym", None),
+        ]
+        .into_iter()
+        .collect();
+        let before = vec![link("food", "home")];
+        // Coffee followed its parent into Home; Gym fed nothing; Food stays put.
+        let moved = moved_links(&before, &[link("coffee", "fun"), link("gym", "fun")], &meta);
+        assert_eq!(moved, vec![link("coffee", "fun")]);
+        assert!(moved_links(&before, &[link("food", "home")], &meta).is_empty());
+
+        let pots = |home: f64, fun: f64| -> HashMap<PotKey, Decimal> {
+            [
+                (("home".to_string(), None), dec(home)),
+                (("fun".to_string(), None), dec(fun)),
+            ]
+            .into_iter()
+            .collect()
+        };
+        let day = NaiveDate::from_ymd_opt(2026, 11, 12).unwrap();
+        let entries = relink_adjustments(&pots(500.0, 40.0), &pots(380.0, 160.0), day);
+        let amounts: Vec<(&str, f64)> = entries
+            .iter()
+            .map(|e| (e.envelope_id.as_str(), e.amount))
+            .collect();
+        // Funded moves by what spend moved, so funded - spent holds in both.
+        assert_eq!(amounts, vec![("fun", 120.0), ("home", -120.0)]);
+        assert!(relink_adjustments(&pots(1.0, 2.0), &pots(1.0, 2.0), day).is_empty());
     }
 }
