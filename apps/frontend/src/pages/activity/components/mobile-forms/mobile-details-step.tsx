@@ -195,10 +195,12 @@ export function MobileDetailsStep({
   const isTaxActivity = activityType === ActivityType.TAX;
   const isIncomeActivity = isDividendActivity || isInterestActivity;
   const needsTax = isBuyOrSell || isIncomeActivity;
+  // Fork: a tax may name the security it was withheld on.
   const needsAssetSymbol =
     (SYMBOL_FIELD_ACTIVITY_TYPES.includes(activityType) && !isCashAdjustment) ||
     isStakingReward ||
-    isSecuritiesTransfer;
+    isSecuritiesTransfer ||
+    isTaxActivity;
   const needsQuantity =
     TRADE_ACTIVITY_TYPES.includes(activityType) ||
     isSecuritiesTransfer ||
@@ -819,12 +821,15 @@ export function MobileDetailsStep({
                   label={
                     isStakingReward
                       ? t("activity:form.label_reward_asset")
-                      : t("activity:form.label_symbol")
+                      : isTaxActivity
+                        ? t("activity:form.label_symbol_optional")
+                        : t("activity:form.label_symbol")
                   }
                   isManualAsset={isManualForType}
                   exchangeMicName="exchangeMic"
                   quoteModeName="quoteMode"
-                  currencyName="currency"
+                  // A tax is paid in the account's currency, whatever the security quotes in.
+                  currencyName={isTaxActivity ? undefined : "currency"}
                   quoteCcyName="symbolQuoteCcy"
                   instrumentTypeName="symbolInstrumentType"
                   existingAssetIdName="existingAssetId"

@@ -785,6 +785,8 @@ export const ACTIVITY_FORM_CONFIG: Record<
       // it with the backend's charge precedence (tax → fee → amount) so editing shows
       // the value that is actually displayed and booked.
       amount: absNum(activity?.tax) || absNum(activity?.fee) || absNum(activity?.amount),
+      symbol: activity?.assetSymbol ?? activity?.assetId ?? null,
+      exchangeMic: activity?.exchangeMic,
       // Advanced options
       currency: activity?.currency,
       // Seed only a valid rate: a legacy 0 stays out of the form, so saving leaves it untouched.
@@ -797,6 +799,20 @@ export const ACTIVITY_FORM_CONFIG: Record<
         fxRate: d.fxRate,
         accountId: d.accountId,
         activityDate: d.activityDate,
+        assetId: d.symbol?.trim() || undefined,
+        ...selectedExistingAsset(d.symbol, d.existingAssetId, d.symbolInstrumentType),
+        exchangeMic: d.exchangeMic ?? undefined,
+        symbolQuoteCcy: d.symbolQuoteCcy ?? undefined,
+        symbolInstrumentType: d.symbolInstrumentType ?? undefined,
+        assetMetadata: d.assetMetadata
+          ? {
+              name: d.assetMetadata.name ?? undefined,
+              kind: d.assetMetadata.kind ?? undefined,
+              exchangeMic: d.assetMetadata.exchangeMic ?? undefined,
+              providerId: d.assetMetadata.providerId ?? undefined,
+              providerSymbol: d.assetMetadata.providerSymbol ?? undefined,
+            }
+          : undefined,
         amount: d.amount,
         // Normalize the charge into `amount` and reset any legacy `tax`/`fee` to zero
         // so the backend's charge precedence (tax → fee → amount) books the edited amount.

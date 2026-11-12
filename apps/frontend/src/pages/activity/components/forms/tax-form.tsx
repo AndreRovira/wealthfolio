@@ -19,8 +19,10 @@ import {
   DatePicker,
   FormSection,
   NotesInput,
+  SymbolSearch,
   type AccountSelectOption,
 } from "./fields";
+import { assetMetadataSchema } from "./schemas";
 import { Spinner } from "@wealthfolio/ui";
 
 // Translated message helper (see buy-form for rationale).
@@ -47,6 +49,13 @@ export const createTaxFormSchema = (t?: TFunction) =>
         message: msg(t, "activity:form.err_amount_non_negative", "Amount must be non-negative."),
       }),
     comment: z.string().optional().nullable(),
+    // Fork: the security a withholding belongs to, so it shows in that holding.
+    symbol: z.string().optional().nullable(),
+    existingAssetId: z.string().nullable().optional(),
+    exchangeMic: z.string().nullable().optional(),
+    symbolQuoteCcy: z.string().nullable().optional(),
+    symbolInstrumentType: z.string().nullable().optional(),
+    assetMetadata: assetMetadataSchema,
     // Advanced options
     currency: z
       .string({ error: msg(t, "activity:form.err_currency_required", "Currency is required.") })
@@ -107,6 +116,7 @@ export function TaxForm({
       activityDate: new Date(),
       amount: undefined,
       comment: null,
+      symbol: null,
       subtype: null,
       ...defaultValues,
       currency: defaultValues?.currency?.trim() || initialCurrency,
@@ -142,6 +152,20 @@ export function TaxForm({
         <FormSection title={t("activity:form.section_account")}>
           <AccountSelect name="accountId" accounts={accounts} />
           <DatePicker name="activityDate" label={t("activity:field_date")} />
+          <SymbolSearch
+            name="symbol"
+            label={t("activity:form.label_symbol_optional")}
+            exchangeMicName="exchangeMic"
+            quoteCcyName="symbolQuoteCcy"
+            instrumentTypeName="symbolInstrumentType"
+            existingAssetIdName="existingAssetId"
+            assetMetadataName="assetMetadata"
+          />
+          <input type="hidden" {...form.register("assetMetadata.providerId")} />
+          <input type="hidden" {...form.register("assetMetadata.providerSymbol")} />
+          <input type="hidden" {...form.register("symbolQuoteCcy")} />
+          <input type="hidden" {...form.register("symbolInstrumentType")} />
+          <input type="hidden" {...form.register("existingAssetId")} />
         </FormSection>
 
         <FormSection title={t("activity:form.section_amount")}>

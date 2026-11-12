@@ -803,7 +803,10 @@ export function MobileActivityForm({
           !isAssetBackedIncome) ||
         isCashAdjustment
       ) {
-        delete (submitData as Record<string, unknown>).assetId;
+        // Fork: a tax keeps the security it was withheld on.
+        if (submitData.activityType !== ActivityType.TAX || !submitData.assetId?.trim()) {
+          delete (submitData as Record<string, unknown>).assetId;
+        }
         delete (submitData as Record<string, unknown>).quantity;
         delete (submitData as Record<string, unknown>).unitPrice;
         if (account && !submitData.currency) {

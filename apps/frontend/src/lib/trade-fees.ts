@@ -40,14 +40,30 @@ export function setTradeFeesInMeta(meta: string | null | undefined, fees: TradeF
   return JSON.stringify(parsed);
 }
 
+// Six decimals of a number as an exact integer, which drops the binary noise
+// of quantity × price (18 × 3298.68 is 59376.240000000005).
+const micro = (value: number) => BigInt(Math.round(positive(value) * 1e6));
+
+/** n / d to the nearest integer, a tie going to the even one. Not for negatives. */
+const divideHalfEven = (n: bigint, d: bigint) => {
+  const quotient = n / d;
+  const twice = (n % d) * 2n;
+  return twice > d || (twice === d && quotient % 2n === 1n) ? quotient + 1n : quotient;
+};
+
+/**
+ * The fee on a traded value, and the tax on that fee, as the brokers bill them:
+ * the fee and the whole charge (fee plus tax) are each rounded to the cent half
+ * to even, and the tax is what is left. Rounding the tax on its own is a cent
+ * off on some trades (4,805.39 at 0.25% + 16% is 12.01 + 1.93, not 1.92).
+ */
 // ponytail: two decimals for every currency; use the currency's minor unit if
 // a zero-decimal one ever gets a commission percentage.
-const round2 = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
-
-/** The fee on a traded value, and the tax on that fee. */
 export function tradeFees(gross: number, rates: TradeFees) {
-  const fee = round2((positive(gross) * rates.feePercent) / 100);
-  return { fee, tax: round2((fee * rates.taxPercent) / 100) };
+  const base = micro(gross) * micro(rates.feePercent);
+  const fee = divideHalfEven(base, 10n ** 12n);
+  const charge = divideHalfEven(base * (10n ** 8n + micro(rates.taxPercent)), 10n ** 20n);
+  return { fee: Number(fee) / 100, tax: Number(charge - fee) / 100 };
 }
 
 interface FeeForm {
@@ -76,7 +92,10 @@ export function useAutoTradeFees(
     };
     // The phone form remounts this step on Back and Next while the values stay
     // in the form: values that match the percentages were filled in, not typed.
-    filled.current ??= { fee: now.fee === next.fee ? next.fee : 0, tax: now.tax === next.tax ? next.tax : 0 };
+    filled.current ??= {
+      fee: now.fee === next.fee ? next.fee : 0,
+      tax: now.tax === next.tax ? next.tax : 0,
+    };
     for (const field of ["fee", "tax"] as const) {
       if (now[field] !== filled.current[field]) continue;
       filled.current[field] = next[field];

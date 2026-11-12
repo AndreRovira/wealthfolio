@@ -78,6 +78,29 @@ describe("charge FX rate", () => {
   });
 });
 
+describe("tax on a security", () => {
+  const config = ACTIVITY_FORM_CONFIG.TAX;
+  const payloadOf = (activity: Parameters<typeof config.getDefaults>[0]) =>
+    config.toPayload(
+      taxFormSchema.parse({ ...config.getDefaults(activity, []), activityDate: new Date() }),
+    );
+
+  it("keeps the security a withholding belongs to", () => {
+    const tax = {
+      activityType: ActivityType.TAX,
+      accountId: "a",
+      amount: "309.17",
+      currency: "MXN",
+    };
+    expect(payloadOf({ ...tax, assetSymbol: "DANHOS13", exchangeMic: "XMEX" })).toMatchObject({
+      assetId: "DANHOS13",
+      exchangeMic: "XMEX",
+      amount: 309.17,
+    });
+    expect(payloadOf(tax)).toMatchObject({ assetId: undefined });
+  });
+});
+
 describe("option defaults", () => {
   const option = {
     activityType: ActivityType.BUY,

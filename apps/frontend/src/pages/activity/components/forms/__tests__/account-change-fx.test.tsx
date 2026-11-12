@@ -171,17 +171,19 @@ describe("account currency change through validated desktop submission", () => {
       const onSubmit = vi.fn();
       const Component = type === "FEE" ? FeeForm : TaxForm;
       render(
-        <Component
-          accounts={[{ value: "old", label: "Original account", currency: "USD" }]}
-          defaultValues={{
-            accountId: "old",
-            activityDate: new Date(),
-            amount: 5,
-            currency: "EUR",
-            fxRate: 1.08,
-          }}
-          onSubmit={onSubmit}
-        />,
+        <QueryClientProvider client={new QueryClient()}>
+          <Component
+            accounts={[{ value: "old", label: "Original account", currency: "USD" }]}
+            defaultValues={{
+              accountId: "old",
+              activityDate: new Date(),
+              amount: 5,
+              currency: "EUR",
+              fxRate: 1.08,
+            }}
+            onSubmit={onSubmit}
+          />
+        </QueryClientProvider>,
       );
       await userEvent.setup().click(screen.getByRole("button", { name: /add/i }));
       await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
