@@ -553,6 +553,9 @@ export function CashActivityForm({
                               <FormControl>
                                 <button
                                   type="button"
+                                  role="combobox"
+                                  aria-haspopup="listbox"
+                                  aria-label={t("common:account")}
                                   className="border-input bg-input-bg dark:bg-input/30 hover:bg-accent/30 ring-offset-background focus:ring-ring h-input-height flex w-full items-center justify-between rounded-md border px-3 py-2 text-sm transition-colors focus:ring-2 focus:ring-offset-2 focus:outline-none"
                                 >
                                   <span

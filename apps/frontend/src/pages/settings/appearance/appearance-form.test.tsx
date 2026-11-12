@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { AppearanceForm } from "./appearance-form";
 
@@ -22,18 +22,22 @@ beforeEach(() => {
   context.updateSettings.mockClear();
 });
 
+// The account's text size; the fork adds a second, per-device picker with the same options.
+const textSize = () =>
+  within(screen.getByRole("group", { name: "settings:appearance_text_size_title" }));
+
 it("offers the text size on phones too and saves the picked size", () => {
   platform.isMobile = true;
   context.settings.textSize = "large";
   render(<AppearanceForm />);
 
   const group = screen.getByRole("group", { name: "settings:appearance_text_size_title" });
-  const large = screen.getByRole("button", { name: "settings:appearance_text_size_large" });
+  const large = textSize().getByRole("button", { name: "settings:appearance_text_size_large" });
   expect(group).toContainElement(large);
   expect(large).toHaveAttribute("aria-pressed", "true");
 
   fireEvent.click(
-    screen.getByRole("button", { name: "settings:appearance_text_size_extra_large" }),
+    textSize().getByRole("button", { name: "settings:appearance_text_size_extra_large" }),
   );
   expect(context.updateSettings).toHaveBeenCalledWith({ textSize: "extra-large" });
 });
@@ -41,7 +45,7 @@ it("offers the text size on phones too and saves the picked size", () => {
 it("shows the default text size when none is saved", () => {
   render(<AppearanceForm />);
   expect(
-    screen.getByRole("button", { name: "settings:appearance_text_size_default" }),
+    textSize().getByRole("button", { name: "settings:appearance_text_size_default" }),
   ).toHaveAttribute("aria-pressed", "true");
 });
 

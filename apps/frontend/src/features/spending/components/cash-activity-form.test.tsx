@@ -17,6 +17,14 @@ import { updateActivity } from "@/adapters";
 import type { Activity } from "@/lib/types";
 import { CashActivityForm } from "./cash-activity-form";
 
+// The account picker is a searchable list (cmdk), which measures and scrolls; jsdom does neither.
+globalThis.ResizeObserver ??= class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+} as unknown as typeof ResizeObserver;
+Element.prototype.scrollIntoView ??= () => {};
+
 async function chooseAccount(user: ReturnType<typeof userEvent.setup>, name: RegExp) {
   await user.click(screen.getByRole("combobox", { name: "Account" }));
   await user.click(await screen.findByRole("option", { name }));

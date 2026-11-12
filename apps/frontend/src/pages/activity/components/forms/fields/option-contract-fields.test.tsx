@@ -390,7 +390,7 @@ describe("OptionContractFields", () => {
     render(<OptionContractTestForm defaultExpirationDate="2027-12-31" />);
     vi.mocked(resolveSymbolQuote).mockClear();
     await user.click(screen.getByRole("button", { name: /Pick a date/ }));
-    await user.click(screen.getByRole("button", { name: /December 15, 2027/ }));
+    await user.click(screen.getByRole("button", { name: /December 15, 2027|15 December 2027/ }));
     expect(screen.getByTestId("expiration-value")).toHaveTextContent("2027-12-15");
     expect(resolveSymbolQuote).not.toHaveBeenCalled();
     await user.click(screen.getByRole("button", { name: "Save" }));
