@@ -49,6 +49,7 @@ import { cn } from "@/lib/utils";
 
 import { CategoryIcon } from "../components/category-chips";
 import { SavingsPlanCard } from "../components/savings-plan-card";
+import { LoadFailed } from "../components/load-failed";
 import {
   useEnvelopeEntries,
   useEnvelopeMutations,
@@ -175,6 +176,7 @@ export default function SpendingEnvelopesPage() {
             <Skeleton className="h-16 w-full" />
           </div>
         )}
+        {snapshot.isError && <LoadFailed onRetry={() => void snapshot.refetch()} />}
         {data && data.pendingIncome.length > 0 && <PendingIncomeSection snapshot={data} />}
         {data && (
           <>
@@ -199,12 +201,15 @@ export default function SpendingEnvelopesPage() {
         )}
       </PageContent>
 
-      <EnvelopeDialog
-        open={envelopeDialog.open}
-        row={envelopeDialog.row}
-        onOpenChange={(open) => setEnvelopeDialog((s) => ({ ...s, open }))}
-      />
-      <MoveDialog open={moveOpen} onOpenChange={setMoveOpen} snapshot={data} />
+      {/* Dialogs mount only while open, so each opening starts from current data and today's date. */}
+      {envelopeDialog.open && (
+        <EnvelopeDialog
+          open
+          row={envelopeDialog.row}
+          onOpenChange={(open) => setEnvelopeDialog((s) => ({ ...s, open }))}
+        />
+      )}
+      {moveOpen && <MoveDialog open onOpenChange={setMoveOpen} snapshot={data} />}
       <RulesSheet open={rulesOpen} onOpenChange={setRulesOpen} snapshot={data} />
     </Page>
   );
@@ -265,6 +270,7 @@ function EnvelopeCard({
   const [linksOpen, setLinksOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [doomed, setDoomed] = useState<Doomed | null>(null);
   const accent = row.envelope.color ?? SPENDING_THEME.deep;
   const currency = snapshot.currency;
   const negative = row.balance < 0;
@@ -426,7 +432,20 @@ function EnvelopeCard({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-      <div className="text-muted-foreground text-2xs px-3 pb-2 tabular-nums sm:hidden">{meta}</div>
+      <div className="text-muted-foreground text-2xs px-3 pb-2 tabular-nums sm:hidden">
+        {target > 0 && (
+          <span className="bg-muted/40 mb-1.5 block h-1 overflow-hidden rounded-full">
+            <span
+              className="block h-full rounded-full"
+              style={{
+                width: `${periodPct * 100}%`,
+                backgroundColor: periodOut > target ? "var(--destructive)" : accent,
+              }}
+            />
+          </span>
+        )}
+        {meta}
+      </div>
 
       {open && components.length > 0 && (
         <div className="border-border/60 divide-border/40 divide-y border-t">
@@ -647,7 +666,7 @@ function EnvelopeCard({
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     className="text-destructive focus:text-destructive text-xs"
-                    onClick={() => m.deleteBill.mutate(b.bill.id)}
+                    onClick={() => setDoomed({ name: b.bill.name, run: () => m.deleteBill.mutate(b.bill.id) })}
                   >
                     <Icons.Trash className="me-2 h-3.5 w-3.5" />
                     {t("common:delete")}
@@ -660,25 +679,27 @@ function EnvelopeCard({
         </div>
       )}
 
-      <EntryDialog
-        open={entryOpen.open}
-        onOpenChange={(o) => setEntryOpen((s) => ({ ...s, open: o }))}
-        row={row}
-        billId={entryOpen.billId ?? null}
-      />
-      <BillDialog
-        open={billDialog.open}
-        onOpenChange={(o) => setBillDialog((s) => ({ ...s, open: o }))}
-        envelopeId={row.envelope.id}
-        bill={billDialog.bill}
-      />
-      <LinksDialog open={linksOpen} onOpenChange={setLinksOpen} row={row} />
-      <HistorySheet
-        open={historyOpen}
-        onOpenChange={setHistoryOpen}
-        row={row}
-        snapshot={snapshot}
-      />
+      {entryOpen.open && (
+        <EntryDialog
+          open
+          onOpenChange={(o) => setEntryOpen((s) => ({ ...s, open: o }))}
+          row={row}
+          billId={entryOpen.billId ?? null}
+        />
+      )}
+      {billDialog.open && (
+        <BillDialog
+          open
+          onOpenChange={(o) => setBillDialog((s) => ({ ...s, open: o }))}
+          envelopeId={row.envelope.id}
+          bill={billDialog.bill}
+        />
+      )}
+      {linksOpen && <LinksDialog open onOpenChange={setLinksOpen} row={row} />}
+      {historyOpen && (
+        <HistorySheet open onOpenChange={setHistoryOpen} row={row} snapshot={snapshot} />
+      )}
+      <ConfirmDelete doomed={doomed} onClose={() => setDoomed(null)} />
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -710,6 +731,31 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
+interface Doomed {
+  name: string;
+  run: () => void;
+}
+
+/** Asks before a delete; nothing here can be undone. */
+function ConfirmDelete({ doomed, onClose }: { doomed: Doomed | null; onClose: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <AlertDialog open={doomed !== null} onOpenChange={(o) => !o && onClose()}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>
+            {t("spending:envelopes.deleteTitle", { name: doomed?.name ?? "" })}
+          </AlertDialogTitle>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>{t("common:cancel")}</AlertDialogCancel>
+          <AlertDialogAction onClick={() => doomed?.run()}>{t("common:delete")}</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
 function num(v: string) {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
@@ -734,18 +780,9 @@ function EnvelopeDialog({
   const [startDate, setStartDate] = useState(e?.startDate ?? today());
   const [allowNegative, setAllowNegative] = useState(e?.allowNegative ?? false);
   const [opening, setOpening] = useState("");
-  const [key, setKey] = useState(e?.id ?? "new");
-  if (open && key !== (e?.id ?? "new")) {
-    setKey(e?.id ?? "new");
-    setName(e?.name ?? "");
-    setColor(e?.color ?? DEFAULT_COLOR);
-    setStartDate(e?.startDate ?? today());
-    setAllowNegative(e?.allowNegative ?? false);
-    setOpening("");
-  }
 
   const save = async () => {
-    const input = { name, color, startDate, allowNegative };
+    const input = { name, color, startDate, allowNegative, icon: e?.icon };
     if (e) {
       await m.updateEnvelope.mutateAsync({ id: e.id, input });
     } else {
@@ -817,7 +854,7 @@ function EnvelopeDialog({
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             {t("common:cancel")}
           </Button>
-          <Button onClick={() => void save()} disabled={!name.trim()}>
+          <Button onClick={() => void save()} disabled={!name.trim() || m.busy}>
             {t("common:save")}
           </Button>
         </DialogFooter>
@@ -846,15 +883,6 @@ function BillDialog({
   const [nextDue, setNextDue] = useState(bill?.nextDue ?? "");
   const [cycle, setCycle] = useState(bill?.cycle ?? "monthly");
   const [opening, setOpening] = useState("");
-  const [key, setKey] = useState(bill?.id ?? "new");
-  if (open && key !== (bill?.id ?? "new")) {
-    setKey(bill?.id ?? "new");
-    setName(bill?.name ?? "");
-    setAmount(bill ? String(bill.expectedAmount) : "");
-    setNextDue(bill?.nextDue ?? "");
-    setCycle(bill?.cycle ?? "monthly");
-    setOpening("");
-  }
 
   const save = async () => {
     const input = {
@@ -895,7 +923,7 @@ function BillDialog({
           <Field label={t("spending:envelopes.name")}>
             <Input value={name} onChange={(ev) => setName(ev.target.value)} autoFocus />
           </Field>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <Field label={t("spending:envelopes.expectedAmount")}>
               <Input
                 type="number"
@@ -938,7 +966,7 @@ function BillDialog({
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             {t("common:cancel")}
           </Button>
-          <Button onClick={() => void save()} disabled={!name.trim()}>
+          <Button onClick={() => void save()} disabled={!name.trim() || m.busy}>
             {t("common:save")}
           </Button>
         </DialogFooter>
@@ -1041,7 +1069,7 @@ function EntryDialog({
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             {t("common:cancel")}
           </Button>
-          <Button onClick={() => void save()} disabled={num(amount) === 0}>
+          <Button onClick={() => void save()} disabled={num(amount) === 0 || m.busy}>
             {t("common:save")}
           </Button>
         </DialogFooter>
@@ -1134,7 +1162,7 @@ function MoveDialog({
           </Button>
           <Button
             onClick={() => void save()}
-            disabled={!from || !to || from === to || num(amount) <= 0}
+            disabled={!from || !to || from === to || num(amount) <= 0 || m.busy}
           >
             {t("spending:envelopes.move")}
           </Button>
@@ -1259,7 +1287,9 @@ function LinksDialog({
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             {t("common:cancel")}
           </Button>
-          <Button onClick={() => void save()}>{t("common:save")}</Button>
+          <Button onClick={() => void save()} disabled={m.busy}>
+            {t("common:save")}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -1282,6 +1312,7 @@ function HistorySheet({
   const { t } = useTranslation();
   const m = useEnvelopeMutations();
   const entries = useEnvelopeEntries(open ? row.envelope.id : null);
+  const [doomed, setDoomed] = useState<Doomed | null>(null);
   const billName = (id: string | null) => row.bills.find((b) => b.bill.id === id)?.bill.name;
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -1322,13 +1353,19 @@ function HistorySheet({
                 size="sm"
                 className="text-muted-foreground h-6 w-6 shrink-0 p-0"
                 aria-label={t("common:delete")}
-                onClick={() => m.deleteEntry.mutate(e.id)}
+                onClick={() =>
+                  setDoomed({
+                    name: e.note || t(`spending:envelopes.kind_${e.kind}`),
+                    run: () => m.deleteEntry.mutate(e.id),
+                  })
+                }
               >
                 <Icons.Trash className="h-3 w-3" />
               </Button>
             </div>
           ))}
         </div>
+        <ConfirmDelete doomed={doomed} onClose={() => setDoomed(null)} />
       </SheetContent>
     </Sheet>
   );
@@ -1344,7 +1381,11 @@ function PendingIncomeSection({ snapshot }: { snapshot: EnvelopeSnapshot }) {
         {t("spending:envelopes.pendingIncome")}
       </h3>
       {snapshot.pendingIncome.map((p) => (
-        <PendingIncomeCard key={`${p.ruleId}:${p.activityId}`} item={p} snapshot={snapshot} />
+        <PendingIncomeCard
+          key={`${p.ruleId}:${p.activityId}:${JSON.stringify(p.proposed)}`}
+          item={p}
+          snapshot={snapshot}
+        />
       ))}
     </div>
   );
@@ -1432,6 +1473,7 @@ function RulesSheet({
   const { t } = useTranslation();
   const m = useEnvelopeMutations();
   const [editing, setEditing] = useState<{ open: boolean; rule?: FundingRule }>({ open: false });
+  const [doomed, setDoomed] = useState<Doomed | null>(null);
   const cadenceLabel: Record<FundingCadence, string> = {
     biweekly: t("spending:envelopes.cadenceBiweekly"),
     semimonthly: t("spending:envelopes.cadenceSemimonthly"),
@@ -1488,7 +1530,7 @@ function RulesSheet({
                 size="sm"
                 className="text-destructive h-7 w-7 p-0"
                 aria-label={t("common:delete")}
-                onClick={() => m.deleteRule.mutate(r.id)}
+                onClick={() => setDoomed({ name: r.name, run: () => m.deleteRule.mutate(r.id) })}
               >
                 <Icons.Trash className="h-3.5 w-3.5" />
               </Button>
@@ -1499,12 +1541,15 @@ function RulesSheet({
           <Icons.Plus className="me-1.5 h-3.5 w-3.5" />
           {t("spending:envelopes.newRule")}
         </Button>
-        <RuleDialog
-          open={editing.open}
-          onOpenChange={(o) => setEditing((s) => ({ ...s, open: o }))}
-          rule={editing.rule}
-          snapshot={snapshot}
-        />
+        {editing.open && (
+          <RuleDialog
+            open
+            onOpenChange={(o) => setEditing((s) => ({ ...s, open: o }))}
+            rule={editing.rule}
+            snapshot={snapshot}
+          />
+        )}
+        <ConfirmDelete doomed={doomed} onClose={() => setDoomed(null)} />
       </SheetContent>
     </Sheet>
   );
@@ -1533,18 +1578,6 @@ function RuleDialog({
   const [shortfall, setShortfall] = useState(rule?.shortfallEnvelopeId ?? "");
   const [active, setActive] = useState(rule?.active ?? true);
   const [splits, setSplits] = useState<FundingSplit[]>(rule?.splits ?? []);
-  const [key, setKey] = useState(rule?.id ?? "new");
-  if (open && key !== (rule?.id ?? "new")) {
-    setKey(rule?.id ?? "new");
-    setName(rule?.name ?? "");
-    setCadence(rule?.cadence ?? "biweekly");
-    setAnchor(rule?.anchorDate ?? today());
-    setDay(rule?.dayOfMonth != null ? String(rule.dayOfMonth) : "22");
-    setIncomeCategory(rule?.incomeCategoryId ?? "");
-    setShortfall(rule?.shortfallEnvelopeId ?? "");
-    setActive(rule?.active ?? true);
-    setSplits(rule?.splits ?? []);
-  }
   const incomeOptions = (income.data?.categories ?? [])
     .slice()
     .sort((a, b) => a.sortOrder - b.sortOrder)
@@ -1772,7 +1805,7 @@ function RuleDialog({
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             {t("common:cancel")}
           </Button>
-          <Button onClick={() => void save()} disabled={!name.trim() || splits.length === 0}>
+          <Button onClick={() => void save()} disabled={!name.trim() || splits.length === 0 || m.busy}>
             {t("common:save")}
           </Button>
         </DialogFooter>

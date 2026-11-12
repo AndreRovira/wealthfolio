@@ -19,6 +19,11 @@ export function invalidateSpendingCaches(qc: QueryClient, opts: { skip?: readonl
     QueryKeys.SPENDING_BUDGET,
     QueryKeys.SPENDING_INSIGHT,
     QueryKeys.SPENDING_EVENTS,
+    // Fork: envelopes, savings and the reconcile read the same activities and categories.
+    "spending_envelopes",
+    "spending_savings",
+    "spending_reconcile_valuations",
+    "spending_fx_pending",
   ];
   for (const key of keys) {
     if (skip.has(key)) continue;

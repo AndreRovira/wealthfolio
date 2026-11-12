@@ -1,3 +1,4 @@
+import { formatDateISO } from "@/lib/utils";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -58,11 +59,11 @@ function SettleRow({ a, currency }: { a: ActivityDetails; currency: string }) {
     onError: () => toast.error(t("spending:fxPending.failed")),
   });
   return (
-    <div className="flex items-center gap-2 text-xs">
-      <div className="min-w-0 flex-1">
+    <div className="flex flex-wrap items-center justify-end gap-2 text-xs">
+      <div className="min-w-0 flex-1 basis-40">
         <div className="text-foreground truncate">{a.comment || a.activityType}</div>
         <div className="text-muted-foreground text-2xs">
-          {a.accountName} · {new Date(a.date).toISOString().slice(0, 10)} ·{" "}
+          {a.accountName} · {formatDateISO(new Date(a.date))} ·{" "}
           {t("spending:fxPending.daysAgo", { count: days })}
         </div>
       </div>
@@ -82,7 +83,7 @@ function SettleRow({ a, currency }: { a: ActivityDetails; currency: string }) {
         variant="outline"
         className="h-7"
         onClick={() => settle.mutate()}
-        disabled={settle.isPending || !Number.isFinite(Number(amount))}
+        disabled={settle.isPending || !(Number(amount) > 0)}
       >
         {t("spending:fxPending.settle")}
       </Button>

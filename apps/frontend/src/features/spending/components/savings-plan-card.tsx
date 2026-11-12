@@ -102,7 +102,7 @@ export function SavingsPlanCard({ periodKey }: { periodKey?: string }) {
     : [];
 
   const cell = (v: number, strong?: boolean) => (
-    <span className={cn("w-24 shrink-0 text-end tabular-nums", strong && "font-semibold")}>
+    <span className={cn("w-20 shrink-0 text-end tabular-nums sm:w-24", strong && "font-semibold")}>
       <PrivacyAmount value={v} currency={currency} />
     </span>
   );
@@ -120,10 +120,10 @@ export function SavingsPlanCard({ periodKey }: { periodKey?: string }) {
             {numberFormatting.formatPercent(rate(data.actualYtdTotal, data.incomeYtd), { digits: 0 })}
           </div>
         </div>
-        <span className="text-muted-foreground text-2xs hidden w-24 text-end uppercase sm:inline">
+        <span className="text-muted-foreground text-2xs w-20 text-end uppercase sm:w-24">
           {t("spending:savingsPlan.planned")}
         </span>
-        <span className="text-muted-foreground text-2xs w-24 text-end uppercase">
+        <span className="text-muted-foreground text-2xs w-20 text-end uppercase sm:w-24">
           {t("spending:savingsPlan.month")}
         </span>
         <span className="text-muted-foreground text-2xs hidden w-24 text-end uppercase sm:inline">
@@ -134,7 +134,7 @@ export function SavingsPlanCard({ periodKey }: { periodKey?: string }) {
         {[...data.rows, ...extra.map((a) => ({ accountId: a.id, accountName: a.name, accountType: a.accountType, plannedMonthly: 0, actualMonth: 0, actualYtd: 0 }))].map((r) => (
           <div key={r.accountId} className="hover:bg-muted/15 flex items-center gap-2 px-3 py-1.5 sm:px-4">
             <span className="text-foreground min-w-0 flex-1 truncate">{r.accountName}</span>
-            <div className="hidden w-24 shrink-0 sm:block">
+            <div className="w-20 shrink-0 sm:w-24">
               <AmountInput
                 value={r.plannedMonthly}
                 onCommit={(v) => savePlan.mutate({ accountId: r.accountId, amount: Number(v) || 0 })}
@@ -152,7 +152,7 @@ export function SavingsPlanCard({ periodKey }: { periodKey?: string }) {
           >
             {showAll ? t("spending:savingsPlan.hideOthers") : t("spending:savingsPlan.showOthers")}
           </button>
-          <span className="hidden sm:inline">{cell(data.plannedMonthlyTotal, true)}</span>
+          {cell(data.plannedMonthlyTotal, true)}
           {cell(data.actualMonthTotal, true)}
           <span className="hidden sm:inline">{cell(data.actualYtdTotal, true)}</span>
         </div>

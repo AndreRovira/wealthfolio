@@ -34,10 +34,11 @@ export function useEnvelopeMutations() {
   const invalidate = () => qc.invalidateQueries({ queryKey: [ENVELOPES_KEY] });
   const opts = (what: string) => ({
     onSuccess: invalidate,
-    onError: () => toast.error(`Failed to ${what}.`),
+    // The reason the server gives (a pot that may not go negative, a missing rule) beats a generic line.
+    onError: (e: Error) => toast.error(e.message || `Failed to ${what}.`),
   });
 
-  return {
+  const all = {
     createEnvelope: useMutation({
       mutationFn: (i: EnvelopeInput) => api.createEnvelope(i),
       ...opts("create envelope"),
@@ -100,4 +101,6 @@ export function useEnvelopeMutations() {
       ...opts("apply income"),
     }),
   };
+  // One flag for every save button: a second tap must not write twice.
+  return { ...all, busy: Object.values(all).some((x) => x.isPending) };
 }
