@@ -430,6 +430,23 @@ impl EnvelopeService {
         {
             return Err(anyhow!("deposit {} is already funded", input.activity_id));
         }
+        let envelopes = self.repo.list_envelopes().await?;
+        let bills = self.repo.list_bills().await?;
+        // A line at zero writes nothing (a bill that is gone resolves to it).
+        for split in input.splits.iter().filter(|s| s.amount != 0.0) {
+            if !split.amount.is_finite() {
+                return Err(anyhow!("amount must be a number"));
+            }
+            let known = envelopes.iter().any(|e| e.id == split.envelope_id)
+                && split.bill_id.as_ref().is_none_or(|id| {
+                    bills
+                        .iter()
+                        .any(|b| &b.id == id && b.envelope_id == split.envelope_id)
+                });
+            if !known {
+                return Err(anyhow!("a line funds a pot that does not exist"));
+            }
+        }
         let entries = input
             .splits
             .into_iter()
@@ -471,9 +488,9 @@ impl EnvelopeService {
         let next = bill
             .next_due
             .ok_or_else(|| anyhow!("bill has no next due date"))?;
-        let advanced = advance_due(next, cycle_months(&bill.cycle), paid);
+        let advanced = advance_due(next, cycle_months(&bill.cycle), paid, bill.due_day);
         let advanced = if advanced == next {
-            add_months(next, cycle_months(&bill.cycle))
+            add_months(next, cycle_months(&bill.cycle), bill.due_day)
         } else {
             advanced
         };
@@ -639,7 +656,7 @@ impl EnvelopeService {
             let Some(paid) = settling_payment(dec(bill.expected_amount), next, flows) else {
                 continue;
             };
-            let advanced = advance_due(next, cycle_months(&bill.cycle), paid);
+            let advanced = advance_due(next, cycle_months(&bill.cycle), paid, bill.due_day);
             if advanced == next {
                 continue;
             }
@@ -1183,18 +1200,28 @@ pub fn cycle_months(cycle: &str) -> u32 {
     }
 }
 
-/// Same day `months` later, clamped to the end of shorter months.
-pub fn add_months(date: NaiveDate, months: u32) -> NaiveDate {
+/// `months` later on the bill's due day, clamped to the end of shorter
+/// months: a bill due on the 31st that February held on the 28th is back on
+/// the 31st in March. Without a due day the date keeps its own.
+pub fn add_months(date: NaiveDate, months: u32, due_day: Option<i32>) -> NaiveDate {
     let total = date.year() * 12 + date.month0() as i32 + months as i32;
     let (y, m) = (total.div_euclid(12), total.rem_euclid(12) as u32 + 1);
-    clamp_day(y, m, date.day())
+    let day = due_day
+        .filter(|d| (1..=31).contains(d))
+        .map_or(date.day(), |d| d as u32);
+    clamp_day(y, m, day)
 }
 
 /// Move `next_due` forward one cycle at a time while a payment on `paid`
 /// settles it (on or up to PAYMENT_WINDOW_DAYS before the due date).
-pub fn advance_due(mut next_due: NaiveDate, months: u32, paid: NaiveDate) -> NaiveDate {
+pub fn advance_due(
+    mut next_due: NaiveDate,
+    months: u32,
+    paid: NaiveDate,
+    due_day: Option<i32>,
+) -> NaiveDate {
     while paid + Duration::days(PAYMENT_WINDOW_DAYS) >= next_due {
-        next_due = add_months(next_due, months);
+        next_due = add_months(next_due, months, due_day);
     }
     next_due
 }
@@ -1665,22 +1692,28 @@ mod tests {
     fn payments_advance_the_due_date_one_cycle_at_a_time() {
         let d = |s: &str| NaiveDate::parse_from_str(s, "%Y-%m-%d").unwrap();
         assert_eq!(
-            advance_due(d("2026-11-09"), 1, d("2026-11-05")),
+            advance_due(d("2026-11-09"), 1, d("2026-11-05"), None),
             d("2026-12-09")
         );
         assert_eq!(
-            advance_due(d("2026-11-09"), 1, d("2026-10-20")),
+            advance_due(d("2026-11-09"), 1, d("2026-10-20"), None),
             d("2026-11-09")
         );
         assert_eq!(
-            advance_due(d("2026-11-09"), 1, d("2027-01-15")),
+            advance_due(d("2026-11-09"), 1, d("2027-01-15"), None),
             d("2027-02-09")
         );
         assert_eq!(
-            advance_due(d("2026-08-17"), 12, d("2026-08-17")),
+            advance_due(d("2026-08-17"), 12, d("2026-08-17"), None),
             d("2027-08-17")
         );
-        assert_eq!(add_months(d("2026-01-31"), 1), d("2026-02-28"));
+        assert_eq!(add_months(d("2026-01-31"), 1, None), d("2026-02-28"));
+        // The due day outlives a short month.
+        assert_eq!(add_months(d("2026-02-28"), 1, Some(31)), d("2026-03-31"));
+        assert_eq!(
+            advance_due(d("2026-02-28"), 1, d("2026-02-27"), Some(31)),
+            d("2026-03-31")
+        );
         assert_eq!(cycle_months("monthly"), 1);
         assert_eq!(cycle_months("yearly"), 12);
         assert_eq!(cycle_months("6 months"), 6);

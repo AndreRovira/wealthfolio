@@ -153,8 +153,8 @@ impl MsiService {
 
     /// Turn a posted card charge into a zero-rate loan plus a card credit.
     pub async fn convert(&self, input: ConvertInput, timezone: &str) -> Result<ConvertResult> {
-        if input.months == 0 {
-            return Err(anyhow!("months must be at least 1"));
+        if !(1..=60).contains(&input.months) {
+            return Err(anyhow!("months must be between 1 and 60"));
         }
         let charge = self
             .activity_service
