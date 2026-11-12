@@ -87,9 +87,26 @@ export interface QuickEnvelopePopoverProps {
    * envelopes (money they already counted, such as an expected credit).
    */
   isIncome?: boolean;
+  /** Money brought back from an investing account returns to the savings pot. */
+  isReturn?: boolean;
   /** The account's meta: one kept out of the envelopes shows no pot. */
   accountMeta?: string | null;
   className?: string;
+}
+
+/** The one pot the savings categories feed, where money brought back returns. */
+function savingsPot(snapshot: EnvelopeSnapshot | undefined, savingsIds: Set<string>) {
+  const pots = (snapshot?.envelopes ?? [])
+    .flatMap((e) => [
+      { envelopeId: e.envelope.id, billId: null as string | null, ids: e.linkedCategoryIds },
+      ...e.bills.map((b) => ({
+        envelopeId: e.envelope.id,
+        billId: b.bill.id as string | null,
+        ids: b.linkedCategoryIds,
+      })),
+    ])
+    .filter((pot) => pot.ids.some((id) => savingsIds.has(id)));
+  return pots.length === 1 ? { envelopeId: pots[0].envelopeId, billId: pots[0].billId } : null;
 }
 
 function skipsEnvelopes(meta: string | null | undefined) {
@@ -107,6 +124,7 @@ export function QuickEnvelopePopover({
   metadata,
   isExpense,
   isIncome = false,
+  isReturn = false,
   accountMeta,
   className,
 }: QuickEnvelopePopoverProps) {
@@ -128,7 +146,9 @@ export function QuickEnvelopePopover({
     [taxonomy.data?.categories, savings.data?.categories],
   );
   const pin = readActivityEnvelope(metadata);
-  const auto = potForCategory(categoryId, snapshot.data, parents);
+  const auto = isReturn
+    ? savingsPot(snapshot.data, new Set(savings.data?.categories.map((c) => c.id)))
+    : potForCategory(categoryId, snapshot.data, parents);
   const effective = pin
     ? pin.envelopeId
       ? { envelopeId: pin.envelopeId, billId: pin.billId }
@@ -150,7 +170,7 @@ export function QuickEnvelopePopover({
     onError: () => toast.error(t("spending:envelopes.pinFailed")),
   });
 
-  if ((!isExpense && !isIncome) || skipsEnvelopes(accountMeta)) return null;
+  if ((!isExpense && !isIncome && !isReturn) || skipsEnvelopes(accountMeta)) return null;
 
   const choose = (envelope: ActivityEnvelope | null) => {
     save.mutate(envelope);

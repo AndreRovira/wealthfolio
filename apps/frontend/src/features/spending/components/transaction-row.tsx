@@ -251,6 +251,7 @@ function TransactionRowImpl({
           metadata={a.metadata}
           isExpense={isOutflow && !isNeutral}
           isIncome={isIncome}
+          isReturn={a.fromSavings === true}
           accountMeta={account?.meta}
           className="-mx-1 mt-0.5 flex"
         />

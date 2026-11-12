@@ -671,6 +671,7 @@ fn fixture_cash_activity(
         })
         .unwrap_or_default();
     CashActivity {
+        from_savings: false,
         activity: Activity {
             id: id.to_string(),
             account_id: account_id.to_string(),

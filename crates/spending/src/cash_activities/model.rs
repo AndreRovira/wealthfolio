@@ -145,6 +145,10 @@ pub struct CashActivity {
     /// Accounting bucket for this activity. Categories label the bucket; they do
     /// not move the activity between Spending, Income, Saving, and Neutral.
     pub cash_flow_bucket: CashFlowBucket,
+    /// Fork: money brought back from an investing account. A neutral row, but
+    /// one the envelopes return to the pot savings leave from.
+    #[serde(default)]
+    pub from_savings: bool,
     /// Activity-scope assignments for this row. Typically 0 or 1 (single-select).
     pub assignments: Vec<ActivityTaxonomyAssignment>,
     /// Exact category allocations. When present, these replace the single

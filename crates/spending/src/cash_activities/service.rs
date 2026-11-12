@@ -235,6 +235,7 @@ impl CashActivityService {
                 let transfer_link_status = transfer_link_status_for(&a, &transfer_link_resolution);
                 let net_amount = decimal_to_f64(net_amount(&a, &account_types));
                 CashActivity {
+                    from_savings: is_from_savings(&a, &account_types, &transfer_groups),
                     activity: a,
                     cash_flow_bucket,
                     assignments,
@@ -699,6 +700,7 @@ impl CashActivityService {
                     })
                     .map(decimal_to_f64);
                 CashActivity {
+                    from_savings: is_from_savings(&a, &account_types, &transfer_groups),
                     activity: a,
                     cash_flow_bucket,
                     assignments,
@@ -814,6 +816,7 @@ impl CashActivityService {
                     transfer_link_status_for(&activity, &transfer_link_resolution);
                 let net_amount = decimal_to_f64(net_amount(&activity, &account_types));
                 CashActivity {
+                    from_savings: is_from_savings(&activity, &account_types, &transfer_groups),
                     activity,
                     cash_flow_bucket,
                     assignments,
@@ -1285,6 +1288,19 @@ fn cash_flow_bucket_for(
             ))
         })
         .unwrap_or(CashFlowBucket::Neutral)
+}
+
+fn is_from_savings(
+    activity: &Activity,
+    account_types: &HashMap<String, String>,
+    transfer_groups: &HashSet<String>,
+) -> bool {
+    account_types
+        .get(&activity.account_id)
+        .is_some_and(|account_type| {
+            classify_activity_for_aggregation(activity, account_type, transfer_groups)
+                == SpendingClassification::FromSavings
+        })
 }
 
 /// `CashActivity::visible_spending_amount`: the spending bucket less the

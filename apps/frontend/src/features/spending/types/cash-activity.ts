@@ -77,6 +77,8 @@ export interface CashActivitySearchRequest {
  */
 export interface CashActivity extends Activity {
   cashFlowBucket: CashFlowBucket;
+  /** Fork: money brought back from an investing account (a neutral row). */
+  fromSavings?: boolean;
   assignments: ActivityTaxonomyAssignment[];
   splits: ActivitySplit[];
   /** Spending event tag from the `activity_events` join. `undefined` when untagged. */
