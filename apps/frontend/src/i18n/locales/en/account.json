@@ -61,7 +61,8 @@
     "success": "Balance updated",
     "error": "Error updating balance. Please try again.",
     "record_as": "Record as",
-    "revaluation": "Revaluation (Investment envelope)"
+    "revaluation": "Revaluation (Investment envelope)",
+    "interest_routed": "Goes to your envelopes by the income rule for interest, with no confirmation."
   },
   "investments": "Investments",
   "net_contribution": "Net Contribution",

@@ -61,7 +61,8 @@
     "success": "Saldo actualizado",
     "error": "Error al actualizar el saldo. Inténtalo de nuevo.",
     "record_as": "Registrar como",
-    "revaluation": "Revaluación (sobre Investment)"
+    "revaluation": "Revaluación (sobre Investment)",
+    "interest_routed": "Se reparte a tus sobres según la regla de ingresos para intereses, sin confirmación."
   },
   "investments": "Inversiones",
   "net_contribution": "Aportación neta",

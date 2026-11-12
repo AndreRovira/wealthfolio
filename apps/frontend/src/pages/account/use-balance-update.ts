@@ -1,6 +1,7 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createActivity } from "@/adapters";
 import { assignActivityCategory } from "@/features/spending/adapters/cash-activities";
+import { applyIncome, getEnvelopeSnapshot } from "@/features/spending/adapters/envelopes";
 import { DECIMAL_PRECISION } from "@/lib/constants";
 import { ActivityCreate } from "@/lib/types";
 import { toast } from "@wealthfolio/ui/components/ui/use-toast";
@@ -20,6 +21,7 @@ export interface BalanceUpdateInput {
 
 export const useBalanceUpdate = (accountId: string) => {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
   const mutation = useMutation({
     mutationFn: async ({
       currency,
@@ -62,6 +64,25 @@ export const useBalanceUpdate = (accountId: string) => {
         await assignActivityCategory(created.id, "income_sources", "cat_income_interest").catch(
           () => undefined,
         );
+        // The income rule already says where interest goes: apply its split
+        // here, so the deposit does not wait on the envelopes page for a click.
+        // On any failure it stays pending there, as it did before.
+        try {
+          const pending = (await getEnvelopeSnapshot()).pendingIncome.find(
+            (p) => p.activityId === created.id,
+          );
+          if (pending) {
+            await applyIncome({
+              ruleId: pending.ruleId,
+              activityId: pending.activityId,
+              entryDate: pending.date,
+              splits: pending.proposed,
+            });
+            void queryClient.invalidateQueries({ queryKey: ["spending_envelopes"] });
+          }
+        } catch {
+          // left pending
+        }
       }
       if (activityType === "REVALUATION" && created?.id) {
         await assignActivityCategory(

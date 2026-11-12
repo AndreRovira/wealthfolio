@@ -241,6 +241,11 @@ export function CashBalanceDialog({
                     : `${kindOptions.find((o) => o.value === activityType)?.label}: ${formatBalance(amount)} ${currency}`
                   : null}
             </p>
+            {activityType === "INTEREST" && amount > 0 && (
+              <p className="text-muted-foreground text-xs">
+                {t("account:balance_edit.interest_routed")}
+              </p>
+            )}
             {form.formState.errors.root && (
               <p role="alert" className="text-destructive text-sm">
                 {form.formState.errors.root.message}

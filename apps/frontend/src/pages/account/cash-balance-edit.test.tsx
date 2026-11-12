@@ -8,9 +8,14 @@ import AccountMetrics from "./account-metrics";
 
 const mocks = vi.hoisted(() => ({ createActivity: vi.fn() }));
 const plan = vi.hoisted(() => ({ getIncomePlan: vi.fn() }));
+const envelopes = vi.hoisted(() => ({ getEnvelopeSnapshot: vi.fn(), applyIncome: vi.fn() }));
 
 vi.mock("@/adapters", () => mocks);
 vi.mock("@/features/spending/adapters/income-plan", () => plan);
+vi.mock("@/features/spending/adapters/envelopes", () => envelopes);
+vi.mock("@/features/spending/adapters/cash-activities", () => ({
+  assignActivityCategory: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock("@wealthfolio/ui/components/ui/use-toast", () => ({ toast: vi.fn() }));
 vi.mock("./performance-grid", () => ({ PerformanceGrid: () => null }));
 
@@ -287,6 +292,25 @@ describe("cash balance editing", () => {
     await user.type(input, "105");
 
     expect(await screen.findByText("Interest: 5 USD")).toBeInTheDocument();
+
+    // Saving applies the split the income rule proposes for that deposit.
+    const split = [{ envelopeId: "investment", billId: null, amount: 5 }];
+    envelopes.getEnvelopeSnapshot.mockResolvedValue({
+      pendingIncome: [
+        { activityId: "adjustment-1", ruleId: "rule-1", date: "2026-06-01", proposed: split },
+      ],
+    });
+    envelopes.applyIncome.mockResolvedValue([]);
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(envelopes.applyIncome).toHaveBeenCalledWith({
+        ruleId: "rule-1",
+        activityId: "adjustment-1",
+        entryDate: "2026-06-01",
+        splits: split,
+      }),
+    );
   });
 
   it("initializes a fresh draft when reopened", async () => {
