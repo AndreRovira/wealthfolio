@@ -390,6 +390,15 @@ impl EnvelopeRepositoryTrait for EnvelopeRepository {
         let id = id.to_string();
         self.writer
             .exec(move |conn| {
+                // The bill's ledger entries fall back to the envelope when it goes,
+                // so its category links must too: dropped links would stop counting
+                // the bill's past spend while its funding stays in the envelope.
+                diesel::update(
+                    envelope_category_links::table.filter(envelope_category_links::bill_id.eq(&id)),
+                )
+                .set(envelope_category_links::bill_id.eq(None::<String>))
+                .execute(conn)
+                .map_err(StorageError::from)?;
                 diesel::delete(envelope_bills::table.find(&id))
                     .execute(conn)
                     .map_err(StorageError::from)?;
@@ -627,5 +636,73 @@ impl EnvelopeRepositoryTrait for EnvelopeRepository {
             })
             .await
             .map_err(err)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::{create_pool, run_migrations, write_actor::spawn_writer, TestDir};
+
+    #[tokio::test]
+    async fn deleting_a_bill_keeps_its_categories_on_the_envelope() {
+        let dir = TestDir::new();
+        let db_path = dir
+            .path()
+            .join("envelopes.db")
+            .to_string_lossy()
+            .to_string();
+        run_migrations(&db_path).unwrap();
+        let pool = create_pool(&db_path).unwrap();
+        let writer = spawn_writer((*pool).clone()).unwrap();
+        let repo = EnvelopeRepository::new(pool, writer);
+
+        let envelope = repo
+            .create_envelope(EnvelopeInput {
+                name: "Bills".into(),
+                color: None,
+                icon: None,
+                sort_order: None,
+                allow_negative: None,
+                start_date: None,
+                archived: None,
+            })
+            .await
+            .unwrap();
+        let bill = repo
+            .create_bill(EnvelopeBillInput {
+                envelope_id: envelope.id.clone(),
+                name: "Rent".into(),
+                expected_amount: Some(100.0),
+                due_day: None,
+                cycle: None,
+                sort_order: None,
+                archived: None,
+                next_due: None,
+            })
+            .await
+            .unwrap();
+        repo.replace_links(
+            &envelope.id,
+            vec![EnvelopeCategoryLink {
+                category_id: "cat_rent".into(),
+                envelope_id: envelope.id.clone(),
+                bill_id: Some(bill.id.clone()),
+            }],
+        )
+        .await
+        .unwrap();
+
+        repo.delete_bill(&bill.id).await.unwrap();
+
+        // The link survives at envelope level, so the bill's past spend still counts.
+        assert_eq!(
+            repo.list_links().await.unwrap(),
+            vec![EnvelopeCategoryLink {
+                category_id: "cat_rent".into(),
+                envelope_id: envelope.id,
+                bill_id: None,
+            }]
+        );
     }
 }

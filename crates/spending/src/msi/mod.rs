@@ -7,6 +7,7 @@
 //! the loan both move like the real ones. The original charge keeps its
 //! category: the purchase is spend at origin.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
@@ -100,7 +101,7 @@ impl MsiService {
 
     /// Card withdrawals of the last `days` not converted yet, newest first.
     pub fn candidates(&self, days: i64, timezone: &str) -> Result<Vec<Candidate>> {
-        let since = Utc::now() - chrono::Duration::days(days);
+        let since = Utc::now() - chrono::Duration::days(days.clamp(1, 366));
         let cards = self
             .account_repo
             .list(None, Some(false), None)
@@ -172,6 +173,27 @@ impl MsiService {
         if msi_meta(&charge).is_some() {
             return Err(anyhow!("this activity is already MSI bookkeeping"));
         }
+        // The loan and its card credit are written one after the other, so a
+        // repeated request must not start a second pair for the same charge.
+        let already_converted = self
+            .activity_service
+            .get_activities_by_account_id(&card.id)
+            .map_err(|e| anyhow!(e.to_string()))?
+            .iter()
+            .any(|a| {
+                msi_meta(a)
+                    .and_then(|m| {
+                        m.get("chargeActivityId")?
+                            .as_str()
+                            .map(|id| id == charge.id)
+                    })
+                    .unwrap_or(false)
+            });
+        if already_converted {
+            return Err(anyhow!("this charge is already converted to MSI"));
+        }
+        // Fail before anything is written when the category is not set up.
+        self.msi_category_id()?;
         let amount = charge
             .amount
             .map(|d| d.abs())
@@ -302,6 +324,21 @@ impl MsiService {
                     _ => None,
                 })
                 .collect();
+            // Instalments already posted to the card. A withdrawal whose loan
+            // link failed is found here and linked, not posted a second time.
+            let posted_already: HashMap<String, String> = self
+                .activity_service
+                .get_activities_by_account_id(&card_id)
+                .map_err(|e| anyhow!(e.to_string()))?
+                .iter()
+                .filter_map(|a| {
+                    let m = msi_meta(a)?;
+                    if m.get("loanId")?.as_str()? != holding.id {
+                        return None;
+                    }
+                    Some((m.get("due")?.as_str()?.to_string(), a.id.clone()))
+                })
+                .collect();
             for (index, instalment) in instalments.iter().enumerate() {
                 if instalment.due_date > as_of
                     || post_from.is_some_and(|from| instalment.due_date < from)
@@ -315,24 +352,29 @@ impl MsiService {
                     .map_err(|e| anyhow!(e.to_string()))?
                     .round_dp(2);
                 let when = local_noon_utc(instalment.due_date, timezone);
-                let activity = self
-                    .create_card_activity(
-                        &card_id,
-                        "WITHDRAWAL",
-                        when,
-                        amount,
-                        &holding.currency,
-                        format!("MSI {}/{} {}", index + 1, total, holding.name),
-                        json!({ MSI_KEY: {
-                            "loanId": holding.id,
-                            "role": "instalment",
-                            "due": instalment.due_date,
-                        }}),
-                    )
-                    .await?;
+                let activity_id = match posted_already.get(&instalment.due_date.to_string()) {
+                    Some(id) => id.clone(),
+                    None => {
+                        self.create_card_activity(
+                            &card_id,
+                            "WITHDRAWAL",
+                            when,
+                            amount,
+                            &holding.currency,
+                            format!("MSI {}/{} {}", index + 1, total, holding.name),
+                            json!({ MSI_KEY: {
+                                "loanId": holding.id,
+                                "role": "instalment",
+                                "due": instalment.due_date,
+                            }}),
+                        )
+                        .await?
+                        .id
+                    }
+                };
                 self.alternative_assets
                     .link_loan_payment(
-                        &activity.id,
+                        &activity_id,
                         PaymentLink::Link {
                             loan_id: holding.id.clone(),
                             escrow: None,
@@ -347,7 +389,7 @@ impl MsiService {
                     loan_name: holding.name.clone(),
                     due_date: instalment.due_date,
                     amount: amount.to_f64().unwrap_or(0.0),
-                    activity_id: activity.id,
+                    activity_id,
                 });
             }
         }
@@ -365,6 +407,8 @@ impl MsiService {
         notes: String,
         metadata: Value,
     ) -> Result<Activity> {
+        // Before the write: an activity left without its category would count as spending.
+        let category = self.msi_category_id()?;
         let activity = self
             .activity_service
             .create_activity(NewActivity {
@@ -393,7 +437,6 @@ impl MsiService {
             })
             .await
             .map_err(|e| anyhow!(e.to_string()))?;
-        let category = self.msi_category_id()?;
         self.assignments
             .assign_single(&activity.id, SPENDING_TAXONOMY, &category)
             .await?;

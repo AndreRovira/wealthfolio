@@ -205,10 +205,16 @@ impl EnvelopeService {
     }
     pub async fn create_bill(&self, input: EnvelopeBillInput) -> Result<EnvelopeBill> {
         require_name(&input.name)?;
+        if let Some(cycle) = &input.cycle {
+            require_cycle(cycle)?;
+        }
         self.repo.create_bill(input).await
     }
     pub async fn update_bill(&self, id: &str, input: EnvelopeBillInput) -> Result<EnvelopeBill> {
         require_name(&input.name)?;
+        if let Some(cycle) = &input.cycle {
+            require_cycle(cycle)?;
+        }
         self.repo.update_bill(id, input).await
     }
     pub async fn delete_bill(&self, id: &str) -> Result<()> {
@@ -479,7 +485,10 @@ impl EnvelopeService {
         );
         let rules = resolve_rules(self.repo.list_rules().await?, &bills, &plan);
 
-        self.materialize_scheduled(&rules, &envelopes, &bills, as_of)
+        // Reading a future date must not write funding for periods that have
+        // not come: later rule changes would never reach those rows.
+        let today = activity_date_in_user_timezone(Utc::now(), timezone);
+        self.materialize_scheduled(&rules, &envelopes, &bills, as_of.min(today))
             .await?;
         let entries = self.repo.list_entries(None, None).await?;
 
@@ -855,6 +864,11 @@ impl EnvelopeService {
             let Some(account_type) = account_types.get(&activity.account_id) else {
                 continue;
             };
+            // Account balances count posted activities only; a draft or void
+            // one debiting a pot would open a gap in the reconcile.
+            if !activity.is_posted() {
+                continue;
+            }
             let local_date = activity_date_in_user_timezone(activity.activity_date, timezone);
             if local_date > as_of {
                 continue;
@@ -959,6 +973,22 @@ impl EnvelopeService {
             .get_taxonomy(taxonomy_id)?
             .map(|t| t.categories)
             .unwrap_or_default())
+    }
+}
+
+/// A cycle label the rest of the code can read: anything else would silently
+/// count as monthly, and an absurd month count never stops advancing a due date.
+fn require_cycle(cycle: &str) -> Result<()> {
+    let c = cycle.trim();
+    let months = c
+        .strip_suffix(" months")
+        .and_then(|n| n.trim().parse::<u32>().ok());
+    if c == "monthly" || c == "yearly" || months.is_some_and(|n| (1..=120).contains(&n)) {
+        Ok(())
+    } else {
+        Err(anyhow!(
+            "cycle must be \"monthly\", \"yearly\" or \"N months\" (1 to 120), got \"{cycle}\""
+        ))
     }
 }
 
@@ -1372,6 +1402,11 @@ mod tests {
         assert_eq!(cycle_months("yearly"), 12);
         assert_eq!(cycle_months("6 months"), 6);
         assert_eq!(cycle_months("weird"), 1);
+        // Labels that would read as monthly, or never stop advancing, are refused on save.
+        assert!(require_cycle("3 months").is_ok());
+        assert!(require_cycle("annual").is_err());
+        assert!(require_cycle("0 months").is_err());
+        assert!(require_cycle("4294967295 months").is_err());
     }
 
     #[test]
