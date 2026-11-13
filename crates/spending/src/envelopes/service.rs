@@ -9,7 +9,9 @@ use uuid::Uuid;
 use wealthfolio_core::accounts::{
     account_supports_purpose, AccountPurpose, AccountRepositoryTrait,
 };
-use wealthfolio_core::activities::{ActivityRepositoryTrait, ActivityServiceTrait, ActivityUpdate};
+use wealthfolio_core::activities::{
+    ActivityError, ActivityRepositoryTrait, ActivityServiceTrait, ActivityUpdate,
+};
 use wealthfolio_core::taxonomies::{Category, TaxonomyServiceTrait};
 use wealthfolio_core::utils::time_utils::activity_date_in_user_timezone;
 
@@ -422,6 +424,12 @@ impl EnvelopeService {
     /// Record the funding entries for one income deposit, with the user's
     /// final amounts. Idempotent per (rule, deposit).
     pub async fn apply_income(&self, input: ApplyIncomeInput) -> Result<Vec<EnvelopeEntry>> {
+        self.fund(input, false).await
+    }
+
+    /// Fund a deposit by its rule. With `redo`, a deposit funded for another
+    /// total is funded again: its amount was edited since.
+    async fn fund(&self, input: ApplyIncomeInput, redo: bool) -> Result<Vec<EnvelopeEntry>> {
         let rule = self
             .repo
             .list_rules()
@@ -431,10 +439,14 @@ impl EnvelopeService {
             .ok_or_else(|| anyhow!("rule {} not found", input.rule_id))?;
         let _funding = self.funding.lock().await;
         let existing = self.repo.list_entries(None, None).await?;
-        if existing
+        let old = existing
             .iter()
-            .any(|e| e.activity_id.as_deref() == Some(&input.activity_id))
-        {
+            .filter(|e| e.activity_id.as_deref() == Some(&input.activity_id))
+            .collect::<Vec<_>>();
+        let was: Decimal = old.iter().map(|e| dec(e.amount)).sum();
+        let now: Decimal = input.splits.iter().map(|s| dec(s.amount)).sum();
+        // The same total means another read redid it first.
+        if !old.is_empty() && (!redo || was.round_dp(2) == now.round_dp(2)) {
             return Err(anyhow!("deposit {} is already funded", input.activity_id));
         }
         let envelopes = self.repo.list_envelopes().await?;
@@ -453,6 +465,11 @@ impl EnvelopeService {
             if !known {
                 return Err(anyhow!("a line funds a pot that does not exist"));
             }
+        }
+        // Not one transaction with the insert: a deposit left unfunded between
+        // the two is funded by the next read.
+        for entry in old {
+            self.repo.delete_entry(&entry.id).await?;
         }
         let entries = input
             .splits
@@ -585,15 +602,21 @@ impl EnvelopeService {
         timezone: &str,
     ) -> Result<EnvelopeSnapshot> {
         let snapshot = self.read(as_of, currency, timezone, None).await?;
-        // Today's view funds the deposits whose rule hands out exactly what
-        // came in. One that would take money out of a pot, or leave part of
+        // Only today's view writes. It funds the deposits whose rule hands
+        // out exactly what came in, again when one was edited after it was
+        // funded. One that would take money out of a pot, or leave part of
         // the deposit unassigned, waits for the user.
-        let today = activity_date_in_user_timezone(Utc::now(), timezone);
-        let mut funded = false;
+        if snapshot.as_of != activity_date_in_user_timezone(Utc::now(), timezone) {
+            return Ok(snapshot);
+        }
+        let mut changed = self.drop_orphan_funding().await.unwrap_or_else(|e| {
+            log::warn!("funding of deleted deposits not checked: {e}");
+            false
+        });
         for income in snapshot
             .pending_income
             .iter()
-            .filter(|p| snapshot.as_of == today && hands_out_deposit(p))
+            .filter(|p| hands_out_deposit(p))
         {
             let input = ApplyIncomeInput {
                 rule_id: income.rule_id.clone(),
@@ -602,15 +625,57 @@ impl EnvelopeService {
                 splits: income.proposed.clone(),
             };
             // A refusal (funded meanwhile by another read) leaves it as it is.
-            match self.apply_income(input).await {
-                Ok(_) => funded = true,
+            match self.fund(input, true).await {
+                Ok(_) => changed = true,
                 Err(e) => log::warn!("income {} not funded: {e}", income.activity_id),
             }
         }
-        if funded {
+        if changed {
             return self.read(as_of, currency, timezone, None).await;
         }
         Ok(snapshot)
+    }
+
+    /// Remove the funding of deposits that were deleted since: money that
+    /// never came. True when something was removed.
+    async fn drop_orphan_funding(&self) -> Result<bool> {
+        let _funding = self.funding.lock().await;
+        let entries = self.repo.list_entries(None, None).await?;
+        let ids = entries
+            .iter()
+            .filter_map(|e| e.activity_id.clone())
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .collect::<Vec<_>>();
+        let listed = self
+            .activity_repo
+            .get_activities_by_ids(&ids)
+            .map_err(|e| anyhow!(e.to_string()))?
+            .into_iter()
+            .map(|a| a.id)
+            .collect::<HashSet<_>>();
+        let mut dropped = false;
+        for id in ids.iter().filter(|id| !listed.contains(*id)) {
+            // The list leaves out archived accounts, so ask for the row itself.
+            // ponytail: told apart from a failed lookup by the repository's
+            // message; give the repository an `exists` if that ever changes.
+            let gone = matches!(
+                self.activity_repo.get_activity(id),
+                Err(wealthfolio_core::Error::Activity(ActivityError::NotFound(m)))
+                    if m == "Record not found"
+            );
+            if !gone {
+                continue;
+            }
+            for entry in entries
+                .iter()
+                .filter(|e| e.activity_id.as_ref() == Some(id))
+            {
+                self.repo.delete_entry(&entry.id).await?;
+            }
+            dropped = true;
+        }
+        Ok(dropped)
     }
 
     /// The snapshot under the stored links, or under `links` to measure what
@@ -838,45 +903,68 @@ impl EnvelopeService {
             });
         }
 
-        let funded_activities: HashSet<&str> = entries
-            .iter()
-            .filter_map(|e| e.activity_id.as_deref())
-            .collect();
+        // What each funded deposit was given.
+        let mut funded_activities: HashMap<&str, Decimal> = HashMap::new();
+        for entry in &entries {
+            if let Some(id) = entry.activity_id.as_deref() {
+                *funded_activities.entry(id).or_default() += dec(entry.amount);
+            }
+        }
         let income_meta: HashMap<String, Category> = self
             .taxonomy_categories(INCOME_TAXONOMY)?
             .into_iter()
             .map(|c| (c.id.clone(), c))
             .collect();
-        let mut pending_income = Vec::new();
-        for rule in rules
+        let on_income = rules
             .iter()
             .filter(|r| r.active && r.cadence == FundingCadence::OnIncome)
-        {
-            let Some(rule_category) = rule.income_category_id.as_deref() else {
+            .filter_map(|r| Some((r, r.income_category_id.as_deref()?)))
+            .collect::<Vec<_>>();
+        // One row per deposit and rule: the parts of a deposit split between
+        // categories of the same rule add up.
+        let mut deposits: Vec<(&str, NaiveDate, &str, &FundingRule, Decimal)> = Vec::new();
+        for (activity_id, date, category_id, amount) in &income_by_activity {
+            let Some(rule) = nearest_rule(&on_income, *date, category_id, &income_meta) else {
                 continue;
             };
-            let since = rule.anchor_date.unwrap_or(NaiveDate::MIN);
-            for (activity_id, date, category_id, amount) in &income_by_activity {
-                if funded_activities.contains(activity_id.as_str())
-                    || *date < since
-                    || !is_or_descends_from(category_id, rule_category, &income_meta)
-                {
-                    continue;
-                }
-                pending_income.push(PendingIncome {
-                    activity_id: activity_id.clone(),
-                    date: *date,
-                    amount: f64_of(*amount),
-                    category_id: category_id.clone(),
-                    rule_id: rule.id.clone(),
-                    rule_name: rule.name.clone(),
-                    proposed: compute_splits(
-                        &rule.splits,
-                        *amount,
-                        rule.shortfall_envelope_id.as_deref(),
-                    ),
-                });
+            match deposits
+                .iter_mut()
+                .find(|d| d.0 == activity_id && d.3.id == rule.id)
+            {
+                Some(deposit) => deposit.4 += *amount,
+                None => deposits.push((activity_id, *date, category_id, rule, *amount)),
             }
+        }
+        let mut pending_income = Vec::new();
+        for (activity_id, date, category_id, rule, amount) in &deposits {
+            let funded = funded_activities.get(activity_id);
+            // ponytail: a deposit split between two rules is funded by the
+            // first only and is never redone; fund per deposit and rule if
+            // that ever comes up.
+            let alone = deposits.iter().filter(|d| d.0 == *activity_id).count() == 1;
+            if funded.is_some_and(|f| !alone || f.round_dp(2) == amount.round_dp(2)) {
+                continue;
+            }
+            let income = PendingIncome {
+                activity_id: activity_id.to_string(),
+                date: *date,
+                amount: f64_of(*amount),
+                category_id: category_id.to_string(),
+                rule_id: rule.id.clone(),
+                rule_name: rule.name.clone(),
+                proposed: compute_splits(
+                    &rule.splits,
+                    *amount,
+                    rule.shortfall_envelope_id.as_deref(),
+                ),
+            };
+            // A deposit edited after it was funded is redone on today's view,
+            // and only when its rule hands out the new amount whole;
+            // otherwise what it was funded with stands.
+            if funded.is_some() && (as_of != today || !hands_out_deposit(&income)) {
+                continue;
+            }
+            pending_income.push(income);
         }
         pending_income.sort_by_key(|p| std::cmp::Reverse(p.date));
 
@@ -1498,20 +1586,32 @@ fn resolve_link<'a>(
     None
 }
 
-fn is_or_descends_from(
+/// The on-income rule a deposit belongs to: the one whose category is the
+/// deposit's own or its nearest ancestor (a rule for Salary wins over one for
+/// its parent); the first listed on a tie.
+fn nearest_rule<'a>(
+    rules: &[(&'a FundingRule, &str)],
+    date: NaiveDate,
     category_id: &str,
-    ancestor: &str,
     meta: &HashMap<String, Category>,
-) -> bool {
-    let mut current = Some(category_id.to_string());
-    for _ in 0..32 {
-        let Some(id) = current else { return false };
-        if id == ancestor {
-            return true;
+) -> Option<&'a FundingRule> {
+    let steps_up = |ancestor: &str| {
+        let mut current = Some(category_id.to_string());
+        for steps in 0..32 {
+            let id = current?;
+            if id == ancestor {
+                return Some(steps);
+            }
+            current = meta.get(&id).and_then(|c| c.parent_id.clone());
         }
-        current = meta.get(&id).and_then(|c| c.parent_id.clone());
-    }
-    false
+        None
+    };
+    rules
+        .iter()
+        .filter(|(rule, _)| date >= rule.anchor_date.unwrap_or(NaiveDate::MIN))
+        .filter_map(|(rule, category)| Some((*rule, steps_up(category)?)))
+        .min_by_key(|(_, steps)| *steps)
+        .map(|(rule, _)| rule)
 }
 
 /// Fixed amounts first; percents apply to what is left after them. Rounded
@@ -1847,6 +1947,66 @@ mod tests {
         // A shortfall deeper than its envelope's line would take money out.
         assert!(!hands_out_deposit(&income(100.0, &[500.0, -400.0])));
         assert!(!hands_out_deposit(&income(100.0, &[])));
+    }
+
+    #[test]
+    fn a_deposit_goes_to_the_rule_nearest_to_its_category() {
+        let category = |id: &str, parent: Option<&str>| {
+            let c = Category {
+                id: id.into(),
+                taxonomy_id: INCOME_TAXONOMY.into(),
+                parent_id: parent.map(Into::into),
+                name: id.into(),
+                key: id.into(),
+                color: String::new(),
+                description: None,
+                sort_order: 0,
+                created_at: Default::default(),
+                updated_at: Default::default(),
+                icon: None,
+            };
+            (c.id.clone(), c)
+        };
+        let meta: HashMap<String, Category> = [
+            category("job", None),
+            category("salary", Some("job")),
+            category("bonus", Some("job")),
+            category("interest", None),
+        ]
+        .into_iter()
+        .collect();
+        let day = |d| NaiveDate::from_ymd_opt(2026, 11, d).unwrap();
+        let rule = |id: &str, since: Option<NaiveDate>| FundingRule {
+            id: id.into(),
+            name: id.into(),
+            cadence: FundingCadence::OnIncome,
+            anchor_date: since,
+            day_of_month: None,
+            income_category_id: None,
+            splits: Vec::new(),
+            active: true,
+            shortfall_envelope_id: None,
+        };
+        let (job, salary, late) = (
+            rule("job", None),
+            rule("salary", None),
+            rule("late", Some(day(10))),
+        );
+        let rules = [(&job, "job"), (&salary, "salary"), (&late, "salary")];
+        let pick = |d, category: &str| {
+            nearest_rule(&rules, day(d), category, &meta).map(|r| r.id.as_str())
+        };
+        // Its own category beats the parent's, whatever the order of the rules.
+        assert_eq!(pick(5, "salary"), Some("salary"));
+        assert_eq!(pick(5, "bonus"), Some("job"));
+        assert_eq!(pick(5, "job"), Some("job"));
+        // Two rules as near: the first listed. One that starts later is not there yet.
+        assert_eq!(pick(12, "salary"), Some("salary"));
+        assert_eq!(
+            nearest_rule(&rules[2..], day(5), "salary", &meta).map(|r| r.id.as_str()),
+            None
+        );
+        assert_eq!(pick(5, "interest"), None);
     }
 
     #[test]
