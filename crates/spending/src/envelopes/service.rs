@@ -754,7 +754,8 @@ impl EnvelopeService {
         // A registered payment settles the due date it falls near and moves
         // the bill to its next cycle; persisted so the state survives reloads.
         // What the pot still holds on that day goes to the envelope the
-        // paycheck remainder feeds, so every cycle starts from zero.
+        // paycheck remainder feeds, and what it lacked comes from there, so
+        // every cycle starts from zero.
         let sweep_to = rules
             .iter()
             .filter(|r| r.active)
@@ -982,6 +983,10 @@ impl EnvelopeService {
 
     /// Insert the funding entries that scheduled rules owe up to `as_of`.
     /// Idempotent: (rule, period, pot) is unique in the ledger.
+    // ponytail: for an envelope's own pot the index sees every missing bill as
+    // different, so two first reads could both insert. Nothing reaches the
+    // insert today: `validate_rule` refuses every rule with a calendar. Take
+    // the funding lock here if those rules ever come back.
     async fn materialize_scheduled(
         &self,
         rules: &[FundingRule],
@@ -1408,9 +1413,11 @@ fn pot_moves(
         .collect()
 }
 
-/// What a settled bill's pot still held on the payment date, if there is
-/// anything to sweep. Money taken out since then is no longer there, so it
-/// counts whatever its date. A pot adjusted on or after the payment keeps
+/// What a settled bill's pot held beyond its payment on the payment date, if
+/// it is not even: a leftover to sweep, or below zero a shortfall to cover
+/// (a bill charged before its last instalment, or for more than expected).
+/// Money taken out since then is no longer there, so it counts whatever its
+/// date. A pot adjusted on or after the payment keeps
 /// what it has: its ledger was corrected after the fact (a category moved
 /// in, a balance set by hand), and that money carries into the next cycle.
 fn leftover(
@@ -1434,7 +1441,8 @@ fn leftover(
         .filter(|(date, _)| *date <= paid)
         .map(|(_, amount)| *amount)
         .sum();
-    (held - charged >= Decimal::new(1, 2)).then(|| round_half_up(held - charged))
+    let gap = held - charged;
+    (gap.abs() >= Decimal::new(1, 2)).then(|| round_half_up(gap))
 }
 
 /// Spend per pot as the snapshot reports it; the envelope's own pot is what
@@ -1505,7 +1513,8 @@ fn settling_payment(
         .max()
 }
 
-/// Both legs of the move that empties a settled bill's pot into `to`.
+/// Both legs of the move that brings a settled bill's pot to zero: a
+/// leftover goes to `to`, a shortfall (a negative `amount`) comes from it.
 fn sweep_entries(
     bill: &EnvelopeBill,
     to: &str,
@@ -1513,13 +1522,18 @@ fn sweep_entries(
     amount: f64,
 ) -> Vec<NewEnvelopeEntry> {
     let move_id = Some(Uuid::new_v4().to_string());
+    let what = if amount < 0.0 {
+        "shortfall"
+    } else {
+        "leftover"
+    };
     let leg = |envelope_id: &str, bill_id: Option<String>, amount: f64| NewEnvelopeEntry {
         envelope_id: envelope_id.to_string(),
         bill_id,
         entry_date: date,
         amount,
         kind: EnvelopeEntryKind::Move,
-        note: Some(format!("{}: leftover", bill.name)),
+        note: Some(format!("{}: {what}", bill.name)),
         move_id: move_id.clone(),
         ..Default::default()
     };
@@ -2370,6 +2384,11 @@ mod tests {
         assert_eq!(pot(&legs[1]), ("investment".into(), None, 100.0));
         assert!(legs[0].move_id.is_some() && legs[0].move_id == legs[1].move_id);
         assert!(legs.iter().all(|e| e.entry_date == day(18)));
+        // A shortfall runs the other way.
+        let legs = sweep_entries(&bill, "investment", day(18), -400.0);
+        assert_eq!(pot(&legs[0]), ("bills".into(), Some("b".into()), 400.0));
+        assert_eq!(pot(&legs[1]), ("investment".into(), None, -400.0));
+        assert_eq!(legs[0].note.as_deref(), Some("Internet: shortfall"));
 
         let entry = |d, amount: f64, kind| EnvelopeEntry {
             id: String::new(),
@@ -2391,6 +2410,13 @@ mod tests {
         assert_eq!(
             leftover(&pot.iter().collect::<Vec<_>>(), &flows, day(18)),
             Some(100.0)
+        );
+        // Charged before its last instalment: the pot is short by that much,
+        // and the instalment that follows is the next cycle's.
+        let pot = [entry(1, 500.0, funding), entry(30, 400.0, funding)];
+        assert_eq!(
+            leftover(&pot.iter().collect::<Vec<_>>(), &flows, day(18)),
+            Some(-400.0)
         );
         // Money moved out by hand since then is not swept a second time.
         let pot = [
