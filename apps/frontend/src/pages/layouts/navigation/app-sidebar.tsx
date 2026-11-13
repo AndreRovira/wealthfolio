@@ -1,7 +1,6 @@
 import { isWeb } from "@/adapters";
 import { isAppleDevice } from "@/lib/device-utils";
 import { useAuth } from "@/context/auth-context";
-import { ProfileMenu } from "@/features/profiles/profile-menu";
 import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
@@ -17,7 +16,6 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useLocation } from "react-router-dom";
 import { type NavLink, type NavigationProps, isPathActive } from "./app-navigation";
-import { ConnectNavItem } from "./connect-nav-item";
 import { resolveNavigationIcon } from "./navigation-icons";
 
 interface AppSidebarProps {
@@ -157,7 +155,6 @@ export function AppSidebar({ navigation }: AppSidebarProps) {
             </div>
 
             <div className="flex shrink-0 flex-col p-2">
-              <ConnectNavItem collapsed={collapsed} />
               {navigation?.secondary?.map((item) => (
                 <NavItem key={item.title} item={item} collapsed={collapsed} />
               ))}
@@ -209,9 +206,6 @@ export function AppSidebar({ navigation }: AppSidebarProps) {
                     }
                   />
                 </Button>
-              </div>
-              <div className="flex justify-center pt-1">
-                <ProfileMenu collapsed={collapsed} />
               </div>
             </div>
           </div>

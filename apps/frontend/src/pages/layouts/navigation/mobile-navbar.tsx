@@ -1,23 +1,10 @@
 import { LiquidGlass } from "@/components/liquid-glass";
-import { ProfileAvatar } from "@/features/profiles/profile-avatar";
-import { useProfile } from "@/features/profiles/profile-context";
-import { MobileProfileMenu } from "@/features/profiles/mobile-profile-menu";
-import { SyncStatusIcon } from "@/features/wealthfolio-connect/components/sync-status-icon";
-import { useAggregatedSyncStatus } from "@/features/wealthfolio-connect/hooks";
 import { useHapticFeedback } from "@/hooks/use-haptic-feedback";
 import { usePlatform } from "@/hooks/use-platform";
 import { cn } from "@/lib/utils";
 import { Icons, Sheet, SheetContent, SheetTitle } from "@wealthfolio/ui";
 import { motion } from "motion/react";
-import {
-  useCallback,
-  useEffect,
-  useId,
-  useRef,
-  useState,
-  type MouseEvent,
-  type ReactNode,
-} from "react";
+import { useCallback, useEffect, useId, useState, type MouseEvent, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useMobileStack } from "../mobile-stack/use-mobile-stack";
@@ -33,7 +20,6 @@ export function MobileNavBar({ navigation }: MobileNavBarProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [profileView, setProfileView] = useState(false);
   const [isLandscape, setIsLandscape] = useState(
     () => typeof window !== "undefined" && window.matchMedia("(orientation: landscape)").matches,
   );
@@ -46,31 +32,16 @@ export function MobileNavBar({ navigation }: MobileNavBarProps) {
     return () => query.removeEventListener("change", onOrientationChange);
   }, []);
 
-  const profileContext = useProfile();
-  const backButtonRef = useRef<HTMLButtonElement>(null);
-  const profileButtonRef = useRef<HTMLButtonElement>(null);
-  const showProfileView = (show: boolean) => {
-    // Keep focus inside the sheet while its focused button is replaced. Base UI
-    // otherwise restores the popup's focus next frame, overriding our target.
-    (show ? profileButtonRef : backButtonRef).current
-      ?.closest<HTMLElement>('[data-slot="sheet-content"]')
-      ?.focus();
-    setProfileView(show);
-    requestAnimationFrame(() => {
-      (show ? backButtonRef : profileButtonRef).current?.focus();
-    });
-  };
-  const closeMenu = () => setMobileMenuOpen(false);
   const { triggerHaptic } = useHapticFeedback();
   const uniqueId = useId();
-  const { status: syncStatus } = useAggregatedSyncStatus();
   const stack = useMobileStack();
-  // Android gets a Material navigation bar; iOS keeps the floating glass bar.
-  const { isAndroid } = usePlatform();
+  // The Android app gets a Material navigation bar; everything else, Android
+  // browsers included, keeps the floating glass bar.
+  const { isAndroid, isTauri } = usePlatform();
 
   const containerClassName = "pointer-events-none fixed inset-x-0 bottom-0 z-50";
   const buttonClassName =
-    "text-foreground relative z-10 flex h-14 w-full items-center justify-center rounded-full transition-colors landscape:size-11";
+    "text-foreground relative z-10 flex size-11 items-center justify-center rounded-full transition-colors";
   const materialItemClassName =
     "group flex min-w-0 flex-1 flex-col items-center justify-center gap-1 outline-none";
   const materialIndicatorClassName = (isActive: boolean) =>
@@ -140,7 +111,6 @@ export function MobileNavBar({ navigation }: MobileNavBarProps) {
 
   const openMenu = () => {
     triggerHaptic();
-    setProfileView(false);
     setMobileMenuOpen(true);
   };
 
@@ -158,7 +128,7 @@ export function MobileNavBar({ navigation }: MobileNavBarProps) {
   };
 
   // Fork: Activities earns the bar slot Search had; Search lives in More (and
-  // Cmd+K). Portrait shows Dashboard, Insights, Holdings and Activities; a
+  // Cmd+K). Portrait shows Dashboard, Holdings, Activities and Insights; a
   // pinned add-on takes Activities' place, so the bar never holds more than
   // five items. Landscape has room for one more.
   const portraitPrimaryCount = directPinnedAddonItems.length > 0 ? 3 : 4;
@@ -170,21 +140,16 @@ export function MobileNavBar({ navigation }: MobileNavBarProps) {
 
   const addonItems = [...overflowPinnedAddonItems, ...addonMenuItems];
   const standardMenuItems: NavLink[] = [
-    searchItem,
     ...primaryItems.slice(visiblePrimaryCount),
+    searchItem,
     ...secondaryItems,
-    {
-      title: t("common:connect"),
-      href: "/connect",
-      icon: <SyncStatusIcon status={syncStatus} className="size-6" />,
-    },
   ];
   const moreItems = [...standardMenuItems, ...addonItems];
   const hasMenu = moreItems.length > 0;
 
   return (
     <div className={containerClassName}>
-      {isAndroid ? (
+      {isAndroid && isTauri ? (
         // Material 3 navigation bar: flush with the bottom edge and running under the
         // gesture area, labelled destinations, a pill behind the current one.
         // The hairline is drawn over the bar, so the bar is exactly as tall as the
@@ -248,14 +213,11 @@ export function MobileNavBar({ navigation }: MobileNavBarProps) {
             variant="floating"
             intensity="subtle"
             className={cn(
-              "pointer-events-auto w-full px-1 py-1 landscape:w-fit landscape:py-1.5",
+              "pointer-events-auto w-fit px-1 py-1.5",
               "h-[var(--mobile-nav-ui-height)]",
             )}
           >
-            <nav
-              aria-label={t("common:layout.primary_navigation")}
-              className="grid auto-cols-fr grid-flow-col place-items-center gap-2 landscape:auto-cols-[2.75rem]"
-            >
+            <nav aria-label={t("common:layout.primary_navigation")} className="flex items-center">
               {visibleItems.map((item) => {
                 const isActive = isItemActive(item.href);
 
@@ -329,24 +291,9 @@ export function MobileNavBar({ navigation }: MobileNavBarProps) {
         >
           <div className="bg-muted mx-auto mt-4 h-1.5 w-14 shrink-0 rounded-full" />
           <div className="flex shrink-0 items-center justify-between px-8 pt-7 pb-4">
-            <div className="flex min-w-0 items-center gap-3">
-              {profileView && (
-                <button
-                  ref={backButtonRef}
-                  type="button"
-                  onClick={() => showProfileView(false)}
-                  className="hover:bg-muted flex size-11 shrink-0 items-center justify-center rounded-full"
-                  aria-label={t("common:back")}
-                >
-                  <Icons.ArrowLeft className="size-5 rtl:rotate-180" />
-                </button>
-              )}
-              <SheetTitle
-                className={cn("truncate font-semibold", profileView ? "text-lg" : "text-2xl")}
-              >
-                {profileView ? t("common:profiles.yourProfile") : t("common:layout.more")}
-              </SheetTitle>
-            </div>
+            <SheetTitle className="truncate text-2xl font-semibold">
+              {t("common:layout.more")}
+            </SheetTitle>
             <button
               type="button"
               onClick={() => setMobileMenuOpen(false)}
@@ -358,34 +305,43 @@ export function MobileNavBar({ navigation }: MobileNavBarProps) {
           </div>
 
           <div className="scrollbar-hide min-h-0 overflow-y-auto px-8">
-            {profileView ? (
-              <MobileProfileMenu onAction={closeMenu} />
-            ) : (
-              <>
-                {profileContext?.profile && (
-                  <div className="border-border/70 border-b pb-3">
-                    <button
-                      ref={profileButtonRef}
-                      type="button"
-                      onClick={() => showProfileView(true)}
-                      aria-label={t("common:profiles.menuLabel", {
-                        name: profileContext.profile.name,
-                      })}
-                      className="hover:bg-muted flex min-h-14 w-full items-center gap-4 rounded-lg text-start"
-                    >
-                      <ProfileAvatar
-                        id={profileContext.profile.avatarId}
-                        className="mx-0 size-8 shrink-0 rounded-full"
-                      />
-                      <span className="min-w-0 flex-1 truncate font-semibold">
-                        {profileContext.profile.name}
-                      </span>
-                      <Icons.ChevronRight className="text-muted-foreground size-5 shrink-0 rtl:rotate-180" />
-                    </button>
-                  </div>
-                )}
+            <div className="divide-border/70 divide-y">
+              {standardMenuItems.map((item) => {
+                const isActive = isItemActive(item.href);
+
+                return (
+                  <Link
+                    key={item.href}
+                    to={item.href}
+                    onClick={(event) => {
+                      setMobileMenuOpen(false);
+                      handleBarItemClick(event, item.href, isActive);
+                    }}
+                    aria-current={isActive ? "page" : undefined}
+                    className={cn(
+                      "group flex h-16 items-center gap-4 transition-colors",
+                      isActive ? "text-primary" : "text-foreground",
+                    )}
+                  >
+                    <span className="flex size-7 shrink-0 items-center justify-center">
+                      {renderIcon(item.icon)}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-lg font-semibold">
+                      {item.title}
+                    </span>
+                    <Icons.ChevronRight className="text-muted-foreground/50 size-5 shrink-0 transition-transform group-hover:translate-x-0.5 rtl:rotate-180 rtl:group-hover:-translate-x-0.5" />
+                  </Link>
+                );
+              })}
+            </div>
+
+            {addonItems.length > 0 && (
+              <div className="pt-6">
+                <div className="text-muted-foreground pb-3 text-xs font-semibold tracking-[0.35em] uppercase">
+                  {t("common:addons")}
+                </div>
                 <div className="divide-border/70 divide-y">
-                  {standardMenuItems.map((item) => {
+                  {addonItems.map((item) => {
                     const isActive = isItemActive(item.href);
 
                     return (
@@ -393,8 +349,8 @@ export function MobileNavBar({ navigation }: MobileNavBarProps) {
                         key={item.href}
                         to={item.href}
                         onClick={(event) => {
+                          handleNavigation(event, item.href, isActive);
                           setMobileMenuOpen(false);
-                          handleBarItemClick(event, item.href, isActive);
                         }}
                         aria-current={isActive ? "page" : undefined}
                         className={cn(
@@ -413,44 +369,7 @@ export function MobileNavBar({ navigation }: MobileNavBarProps) {
                     );
                   })}
                 </div>
-
-                {addonItems.length > 0 && (
-                  <div className="pt-6">
-                    <div className="text-muted-foreground pb-3 text-xs font-semibold tracking-[0.35em] uppercase">
-                      {t("common:addons")}
-                    </div>
-                    <div className="divide-border/70 divide-y">
-                      {addonItems.map((item) => {
-                        const isActive = isItemActive(item.href);
-
-                        return (
-                          <Link
-                            key={item.href}
-                            to={item.href}
-                            onClick={(event) => {
-                              handleNavigation(event, item.href, isActive);
-                              setMobileMenuOpen(false);
-                            }}
-                            aria-current={isActive ? "page" : undefined}
-                            className={cn(
-                              "group flex h-16 items-center gap-4 transition-colors",
-                              isActive ? "text-primary" : "text-foreground",
-                            )}
-                          >
-                            <span className="flex size-7 shrink-0 items-center justify-center">
-                              {renderIcon(item.icon)}
-                            </span>
-                            <span className="min-w-0 flex-1 truncate text-lg font-semibold">
-                              {item.title}
-                            </span>
-                            <Icons.ChevronRight className="text-muted-foreground/50 size-5 shrink-0 transition-transform group-hover:translate-x-0.5 rtl:rotate-180 rtl:group-hover:-translate-x-0.5" />
-                          </Link>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </>
+              </div>
             )}
           </div>
         </SheetContent>

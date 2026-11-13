@@ -719,13 +719,11 @@ body.qr-scan-active > .qr-overlay {
   pointer-events: auto;
 }
 
-/* Match the desktop floating bar's compact height on mobile in landscape.
-   Recompute clearance here so page content inherits the reduced height too. */
-@media (orientation: landscape) {
-  .app-shell[data-mobile-navigation="true"] {
-    --mobile-nav-ui-height: 3.5rem;
-    --mobile-nav-total-offset: calc(var(--mobile-nav-ui-height) + var(--mobile-nav-bottom-offset));
-  }
+/* Fork: the phone's floating bar is as compact as the desktop one in both
+   orientations. Recompute clearance here so page content inherits the height too. */
+.app-shell[data-mobile-navigation="true"] {
+  --mobile-nav-ui-height: 3.5rem;
+  --mobile-nav-total-offset: calc(var(--mobile-nav-ui-height) + var(--mobile-nav-bottom-offset));
 }
 
 /* Android's Material navigation bar sits flush with the bottom edge: content clears its

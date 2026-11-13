@@ -5,6 +5,7 @@ import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useIsCompactTableViewport, usePlatform } from "@/hooks/use-platform";
+import { ProfileMenu } from "@/features/profiles/profile-menu";
 import { SidebarNav } from "./sidebar-nav";
 import { cardSurfaceClassName } from "@wealthfolio/ui/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -168,6 +169,8 @@ export default function SettingsLayout() {
             </div>
           </div>
           <div className="space-y-6 p-3 pb-[var(--mobile-nav-total-offset)]">
+            {/* Fork: the navigation bars no longer carry the profile menu. */}
+            <ProfileMenu />
             {sections.map((section) => (
               <div key={section.title} className="space-y-3">
                 <div className="text-muted-foreground px-2 text-xs font-semibold tracking-widest uppercase">
@@ -225,6 +228,7 @@ export default function SettingsLayout() {
                 sticky offset and let it scroll instead. */}
             <aside className="hidden w-60 shrink-0 lg:sticky lg:top-24 lg:flex lg:max-h-[calc(100dvh-6rem)] lg:flex-col lg:self-start lg:overflow-y-auto">
               <div className="space-y-6">
+                <ProfileMenu />
                 {sections.map((section) => (
                   <div key={section.title} className="space-y-2">
                     <div className="text-muted-foreground ps-2 text-sm font-light tracking-widest uppercase">

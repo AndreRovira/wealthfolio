@@ -35,13 +35,6 @@ function buildStaticNavigation(t: TFunction): NavigationProps {
         label: t("common:nav.label_dashboard"),
       },
       {
-        icon: <Icons.Dashboard className="size-6" />,
-        title: t("common:insights"),
-        href: "/insights",
-        keywords: ["insights", "Analytics"],
-        label: t("common:nav.label_insights"),
-      },
-      {
         icon: <Icons.Holdings className="size-6" />,
         title: t("common:holdings"),
         href: "/holdings",
@@ -54,6 +47,13 @@ function buildStaticNavigation(t: TFunction): NavigationProps {
         href: "/activities",
         keywords: ["transactions", "trades", "history"],
         label: t("common:nav.label_activities"),
+      },
+      {
+        icon: <Icons.Dashboard className="size-6" />,
+        title: t("common:insights"),
+        href: "/insights",
+        keywords: ["insights", "Analytics"],
+        label: t("common:nav.label_insights"),
       },
       {
         icon: <Icons.Goals className="size-6" />,
