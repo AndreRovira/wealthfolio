@@ -140,12 +140,13 @@ export function DatePickerInput({
         >
           <DateInput
             unstyled
-            className="flex-1 border-none bg-transparent ring-0 outline-none focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+            className="scrollbar-hide min-w-0 flex-1 overflow-x-auto border-none bg-transparent ring-0 outline-none focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0"
           />
           <Button
             className={cn(
               "text-muted-foreground/80 hover:text-foreground focus-visible:outline-solid focus-visible:outline-ring focus-visible:outline-2 focus-visible:outline-offset-2",
-              "flex h-6 w-6 items-center justify-center rounded-sm transition-[color]",
+              // Fork: never squeezed out by the segments on a narrow phone at a large text size.
+              "flex h-6 w-6 shrink-0 items-center justify-center rounded-sm transition-[color]",
               disabled && "pointer-events-none",
             )}
             aria-label={t("ui:datePicker.pick", "Pick a date")}

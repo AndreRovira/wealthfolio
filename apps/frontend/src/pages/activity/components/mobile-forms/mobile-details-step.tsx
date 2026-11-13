@@ -608,7 +608,8 @@ export function MobileDetailsStep({
 
   return (
     <div className="flex h-full flex-col">
-      <ScrollArea>
+      {/* Fork: no scroll wrapper. The sheet scrolls already, and the wrapper let the form grow wider than a phone at the larger text sizes. */}
+      <>
         <div className="form-mobile-spacing pb-4">
           <FormSection title={t("activity:form.section_asset_account")} action={headerAction}>
             {assetTypeSelector}
@@ -1199,7 +1200,7 @@ export function MobileDetailsStep({
             />
           </AdvancedOptionsSection>
         </div>
-      </ScrollArea>
+      </>
 
       {/* Hidden Account Sheets - Rendered outside scrollable area */}
       <div className="hidden">

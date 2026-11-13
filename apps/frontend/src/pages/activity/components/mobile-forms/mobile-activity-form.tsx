@@ -1049,15 +1049,15 @@ export function MobileActivityForm({
           </div>
         </div>
 
-        <SheetFooter className="mt-auto border-t px-6 py-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-          <div className="flex w-full gap-3">
+        <SheetFooter className="mt-auto border-t px-4 py-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+          <div className="flex w-full gap-2">
             {currentStep > 1 && !shouldStartOnDetails && (
               <Button
                 type="button"
                 variant="outline"
                 size="default"
                 onClick={handleBack}
-                className="flex-1"
+                className="flex-1 has-[>svg]:px-3"
               >
                 <Icons.ArrowLeft className="me-2 h-4 w-4 rtl:rotate-180" />
                 {t("activity:mobile_back")}
@@ -1080,7 +1080,7 @@ export function MobileActivityForm({
                 type="button"
                 size="default"
                 onClick={handleValidatedSubmit}
-                className="flex-1 font-medium"
+                className="flex-1 font-medium has-[>svg]:px-3"
                 disabled={isLoading}
               >
                 {isLoading ? (
