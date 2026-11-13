@@ -301,6 +301,26 @@ describe("cash balance editing", () => {
     );
   });
 
+  it("waits for the plan before it names growth a deposit or interest", async () => {
+    let answer: (value: unknown) => void = () => undefined;
+    plan.getIncomePlan.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    const user = userEvent.setup();
+    renderMetrics({ cashCurrencySplit: [cashCurrencySplit[1]] });
+
+    await user.click(screen.getByRole("button", { name: "Adjust cash balance" }));
+    const input = screen.getByLabelText("New balance");
+    await user.clear(input);
+    await user.type(input, "105");
+
+    expect(screen.queryByText(/Deposit/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+
+    answer({ lines: [], constants: [], liquidity: { rates: { "account-1": 9.5 } } });
+
+    expect(await screen.findByText("Interest: 5 USD")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
+  });
+
   it("books growth in a brokerage account as interest, with no envelope note", async () => {
     const user = userEvent.setup();
     renderMetrics({ cashCurrencySplit: [cashCurrencySplit[1]], accountType: "SECURITIES" });

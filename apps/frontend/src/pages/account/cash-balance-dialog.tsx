@@ -108,6 +108,13 @@ export function CashBalanceDialog({
   const positiveKind = chosenKind ?? (growsByItself ? "INTEREST" : "DEPOSIT");
   const [negativeKind, setNegativeKind] = useState<BalanceUpdateKind>("WITHDRAWAL");
   const activityType = difference > 0 ? positiveKind : negativeKind;
+  // Until the plan answers, growth in a cash account has no kind yet: saving
+  // then would book interest as a deposit.
+  const kindPending =
+    plan.isPending &&
+    chosenKind === null &&
+    difference > 0 &&
+    accountType !== AccountType.SECURITIES;
   const kindOptions: { value: BalanceUpdateKind; label: string }[] =
     difference > 0
       ? [
@@ -211,7 +218,7 @@ export function CashBalanceDialog({
                 </FormItem>
               )}
             />
-            {Number.isFinite(amount) && amount > 0 && !unavailable && (
+            {Number.isFinite(amount) && amount > 0 && !unavailable && !kindPending && (
               <FormItem>
                 <FormLabel>{t("account:balance_edit.record_as")}</FormLabel>
                 <Select
@@ -243,7 +250,9 @@ export function CashBalanceDialog({
                 : Number.isFinite(amount) && targetBalance != null && targetBalance >= 0
                   ? amount === 0
                     ? t("account:balance_edit.no_change")
-                    : `${kindOptions.find((o) => o.value === activityType)?.label}: ${formatBalance(amount)} ${currency}`
+                    : kindPending
+                      ? null
+                      : `${kindOptions.find((o) => o.value === activityType)?.label}: ${formatBalance(amount)} ${currency}`
                   : null}
             </p>
             {/* Envelopes follow cash accounts: brokerage interest reaches them when it is transferred out. */}
@@ -266,6 +275,7 @@ export function CashBalanceDialog({
                 disabled={
                   busy ||
                   unavailable ||
+                  kindPending ||
                   targetBalance == null ||
                   targetBalance < 0 ||
                   !Number.isFinite(amount) ||
