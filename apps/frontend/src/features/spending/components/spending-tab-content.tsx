@@ -84,7 +84,6 @@ import {
   localDateParts,
 } from "../lib/timezone";
 import { EnvelopesDashboardCard } from "./envelopes-dashboard-card";
-import { ReconcileCard } from "./reconcile-card";
 import { CashFlowStrip } from "./cash-flow-strip";
 import { EventsCard } from "./events-card";
 import { RecentActivityCard } from "./recent-activity-card";
@@ -491,8 +490,7 @@ export default function SpendingTabContent() {
   // Aggregated error state for the headline banner. Activities / budget
   // failures degrade more silently than report (their absence shows up as
   // a flat treemap or hidden chips), but the user deserves a signal.
-  const dataErrored =
-    reportErrored || activitiesErrored || budgetErrored;
+  const dataErrored = reportErrored || activitiesErrored || budgetErrored;
   const hasNoIncludedAccounts = !spendingSettingsLoading && spendingAccountIds.length === 0;
 
   // Always render in the user's base currency. The backend FX-converts every
@@ -1146,9 +1144,6 @@ export default function SpendingTabContent() {
             </div>
 
             <div className="contents @min-[53rem]:block @min-[53rem]:space-y-6">
-              <div className="order-2 @min-[53rem]:order-none">
-                <ReconcileCard />
-              </div>
               <div className="order-2 @min-[53rem]:order-none">
                 <EnvelopesDashboardCard
                   monthKey={budgetMonthKey}

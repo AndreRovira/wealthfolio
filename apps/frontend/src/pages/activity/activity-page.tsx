@@ -944,7 +944,7 @@ const ActivityPage = () => {
       <SwipablePage
         views={views}
         defaultView="spending"
-        persistKey="activity-page-tab"
+        persistKey="activity-page-view"
         desktopContentClassName="overflow-y-visible"
       />
       {sharedModals}
