@@ -24,6 +24,7 @@ use crate::activity_classification::{
     SpendingClassification,
 };
 use crate::activity_splits::ActivitySplitRepositoryTrait;
+use crate::error::refuse;
 use crate::fx::CalculationQuality;
 use crate::settings::SpendingSettingsService;
 
@@ -231,7 +232,7 @@ impl EnvelopeService {
         let snapshot = self.snapshot(None, currency, timezone).await?;
         if let Some(row) = snapshot.envelopes.iter().find(|e| e.envelope.id == id) {
             if row.balance.abs() >= 0.01 {
-                return Err(anyhow!(
+                return Err(refuse!(
                     "{} still holds {:.2}: move it to another envelope first",
                     row.envelope.name,
                     row.balance
@@ -242,7 +243,7 @@ impl EnvelopeService {
             r.shortfall_envelope_id.as_deref() == Some(id)
                 || r.splits.iter().any(|s| s.envelope_id == id)
         }) {
-            Some(rule) => Err(anyhow!(
+            Some(rule) => Err(refuse!(
                 "rule \"{}\" still funds this envelope: remove its line first",
                 rule.name
             )),
@@ -274,7 +275,7 @@ impl EnvelopeService {
             .iter()
             .any(|b| b.id == id && b.envelope_id != input.envelope_id)
         {
-            return Err(anyhow!(
+            return Err(refuse!(
                 "a bill stays in its envelope: create it in the other one and move the money"
             ));
         }
@@ -301,7 +302,7 @@ impl EnvelopeService {
         timezone: &str,
     ) -> Result<()> {
         if links.iter().any(|l| l.envelope_id != envelope_id) {
-            return Err(anyhow!("every link must point at envelope {envelope_id}"));
+            return Err(refuse!("every link must point at envelope {envelope_id}"));
         }
         let before = self.repo.list_links().await?;
         let mut categories = self.taxonomy_categories(SPENDING_TAXONOMY)?;
@@ -339,7 +340,7 @@ impl EnvelopeService {
     }
     pub async fn add_entry(&self, input: EntryInput) -> Result<EnvelopeEntry> {
         if input.kind == EnvelopeEntryKind::Move {
-            return Err(anyhow!("use move_money for moves"));
+            return Err(refuse!("use move_money for moves"));
         }
         require_amount(input.amount)?;
         let rows = self
@@ -361,12 +362,12 @@ impl EnvelopeService {
     pub async fn move_money(&self, input: MoveInput) -> Result<Vec<EnvelopeEntry>> {
         require_amount(input.amount)?;
         if input.amount <= 0.0 {
-            return Err(anyhow!("move amount must be positive"));
+            return Err(refuse!("move amount must be positive"));
         }
         if (&input.from_envelope_id, &input.from_bill_id)
             == (&input.to_envelope_id, &input.to_bill_id)
         {
-            return Err(anyhow!("source and destination are the same pot"));
+            return Err(refuse!("source and destination are the same pot"));
         }
         let move_id = Some(Uuid::new_v4().to_string());
         let leg = |envelope_id: String, bill_id: Option<String>, amount: f64| NewEnvelopeEntry {
@@ -436,7 +437,7 @@ impl EnvelopeService {
             .await?
             .into_iter()
             .find(|r| r.id == input.rule_id)
-            .ok_or_else(|| anyhow!("rule {} not found", input.rule_id))?;
+            .ok_or_else(|| refuse!("rule {} not found", input.rule_id))?;
         let _funding = self.funding.lock().await;
         let existing = self.repo.list_entries(None, None).await?;
         let old = existing
@@ -447,14 +448,14 @@ impl EnvelopeService {
         let now: Decimal = input.splits.iter().map(|s| dec(s.amount)).sum();
         // The same total means another read redid it first.
         if !old.is_empty() && (!redo || was.round_dp(2) == now.round_dp(2)) {
-            return Err(anyhow!("deposit {} is already funded", input.activity_id));
+            return Err(refuse!("deposit {} is already funded", input.activity_id));
         }
         let envelopes = self.repo.list_envelopes().await?;
         let bills = self.repo.list_bills().await?;
         // A line at zero writes nothing (a bill that is gone resolves to it).
         for split in input.splits.iter().filter(|s| s.amount != 0.0) {
             if !split.amount.is_finite() {
-                return Err(anyhow!("amount must be a number"));
+                return Err(refuse!("amount must be a number"));
             }
             let known = envelopes.iter().any(|e| e.id == split.envelope_id)
                 && split.bill_id.as_ref().is_none_or(|id| {
@@ -463,7 +464,7 @@ impl EnvelopeService {
                         .any(|b| &b.id == id && b.envelope_id == split.envelope_id)
                 });
             if !known {
-                return Err(anyhow!("a line funds a pot that does not exist"));
+                return Err(refuse!("a line funds a pot that does not exist"));
             }
         }
         // Not one transaction with the insert: a deposit left unfunded between
@@ -505,13 +506,13 @@ impl EnvelopeService {
             .await?
             .into_iter()
             .find(|b| b.id == bill_id)
-            .ok_or_else(|| anyhow!("bill {bill_id} not found"))?;
+            .ok_or_else(|| refuse!("bill {bill_id} not found"))?;
         let paid = input
             .date
             .unwrap_or_else(|| activity_date_in_user_timezone(Utc::now(), timezone));
         let next = bill
             .next_due
-            .ok_or_else(|| anyhow!("bill has no next due date"))?;
+            .ok_or_else(|| refuse!("bill has no next due date"))?;
         let advanced = advance_due(next, cycle_months(&bill.cycle), paid, bill.due_day);
         let advanced = if advanced == next {
             add_months(next, cycle_months(&bill.cycle), bill.due_day)
@@ -547,7 +548,7 @@ impl EnvelopeService {
                 .iter()
                 .any(|e| &e.id == envelope_id)
             {
-                return Err(anyhow!("envelope {envelope_id} not found"));
+                return Err(refuse!("envelope {envelope_id} not found"));
             }
             if let Some(bill_id) = bill_id {
                 if !self
@@ -557,7 +558,7 @@ impl EnvelopeService {
                     .iter()
                     .any(|b| &b.id == bill_id && &b.envelope_id == envelope_id)
                 {
-                    return Err(anyhow!("bill {bill_id} is not in envelope {envelope_id}"));
+                    return Err(refuse!("bill {bill_id} is not in envelope {envelope_id}"));
                 }
             }
         }
@@ -1328,7 +1329,7 @@ fn require_cycle(cycle: &str) -> Result<()> {
     if c == "monthly" || c == "yearly" || months.is_some_and(|n| (1..=120).contains(&n)) {
         Ok(())
     } else {
-        Err(anyhow!(
+        Err(refuse!(
             "cycle must be \"monthly\", \"yearly\" or \"N months\" (1 to 120), got \"{cycle}\""
         ))
     }
@@ -1727,26 +1728,26 @@ fn validate_rule(input: &FundingRuleInput) -> Result<()> {
     require_name(&input.name)?;
     for split in input.splits.iter().filter(|s| s.source.is_some()) {
         if split.percent.is_some() {
-            return Err(anyhow!("a line takes a percent or a source, not both"));
+            return Err(refuse!("a line takes a percent or a source, not both"));
         }
         if split.source.as_deref() == Some(SOURCE_BILL) && split.bill_id.is_none() {
-            return Err(anyhow!("a line sourced from a bill needs the bill"));
+            return Err(refuse!("a line sourced from a bill needs the bill"));
         }
     }
     match input.cadence {
         FundingCadence::OnIncome => {
             if input.income_category_id.as_deref().unwrap_or("").is_empty() {
-                return Err(anyhow!("an on-income rule needs an income category"));
+                return Err(refuse!("an on-income rule needs an income category"));
             }
             let pct: f64 = input.splits.iter().filter_map(|s| s.percent).sum();
             if pct > 100.0 + 1e-9 {
-                return Err(anyhow!("percent splits add up to more than 100"));
+                return Err(refuse!("percent splits add up to more than 100"));
             }
         }
         // Funding by calendar re-funds past periods when a rule changes, and
         // nothing uses it: every split follows a deposit.
         _ => {
-            return Err(anyhow!(
+            return Err(refuse!(
                 "only rules that split an income deposit are supported"
             ))
         }
@@ -1756,7 +1757,7 @@ fn validate_rule(input: &FundingRuleInput) -> Result<()> {
 
 fn require_name(name: &str) -> Result<()> {
     if name.trim().is_empty() {
-        Err(anyhow!("name is required"))
+        Err(refuse!("name is required"))
     } else {
         Ok(())
     }
@@ -1764,7 +1765,7 @@ fn require_name(name: &str) -> Result<()> {
 
 fn require_amount(amount: f64) -> Result<()> {
     if !amount.is_finite() || amount == 0.0 {
-        Err(anyhow!("amount must be a non-zero number"))
+        Err(refuse!("amount must be a non-zero number"))
     } else {
         Ok(())
     }
@@ -2066,7 +2067,11 @@ mod tests {
         assert_eq!(cycle_months("weird"), 1);
         // Labels that would read as monthly, or never stop advancing, are refused on save.
         assert!(require_cycle("3 months").is_ok());
-        assert!(require_cycle("annual").is_err());
+        // A refusal is typed, so the server answers it with 400 and not 500.
+        assert!(require_cycle("annual")
+            .unwrap_err()
+            .downcast_ref::<crate::error::SpendingError>()
+            .is_some());
         assert!(require_cycle("0 months").is_err());
         assert!(require_cycle("4294967295 months").is_err());
     }

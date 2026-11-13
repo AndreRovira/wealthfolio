@@ -29,6 +29,7 @@ use wealthfolio_core::taxonomies::TaxonomyServiceTrait;
 use wealthfolio_core::utils::time_utils::activity_date_in_user_timezone;
 
 use crate::activity_assignments::ActivityTaxonomyAssignmentService;
+use crate::error::refuse;
 
 const SPENDING_TAXONOMY: &str = "spending_categories";
 /// Category that keeps MSI bookkeeping out of spending reports; created when missing.
@@ -154,7 +155,7 @@ impl MsiService {
     /// Turn a posted card charge into a zero-rate loan plus a card credit.
     pub async fn convert(&self, input: ConvertInput, timezone: &str) -> Result<ConvertResult> {
         if !(1..=60).contains(&input.months) {
-            return Err(anyhow!("months must be between 1 and 60"));
+            return Err(refuse!("months must be between 1 and 60"));
         }
         let charge = self
             .activity_service
@@ -165,13 +166,13 @@ impl MsiService {
             .get_by_id(&charge.account_id)
             .map_err(|e| anyhow!(e.to_string()))?;
         if card.account_type != account_types::CREDIT_CARD {
-            return Err(anyhow!("only credit card charges can be converted to MSI"));
+            return Err(refuse!("only credit card charges can be converted to MSI"));
         }
         if charge.effective_type() != "WITHDRAWAL" || !charge.is_posted() {
-            return Err(anyhow!("only a posted card charge can be converted to MSI"));
+            return Err(refuse!("only a posted card charge can be converted to MSI"));
         }
         if msi_meta(&charge).is_some() {
-            return Err(anyhow!("this activity is already MSI bookkeeping"));
+            return Err(refuse!("this activity is already MSI bookkeeping"));
         }
         // The loan and its card credit are written one after the other, so a
         // repeated request must not start a second pair for the same charge.
@@ -190,7 +191,7 @@ impl MsiService {
                     .unwrap_or(false)
             });
         if already_converted {
-            return Err(anyhow!("this charge is already converted to MSI"));
+            return Err(refuse!("this charge is already converted to MSI"));
         }
         // Fail before anything is written when the category is not set up.
         self.msi_category_id()?;
@@ -198,10 +199,10 @@ impl MsiService {
             .amount
             .map(|d| d.abs())
             .filter(|d| *d > Decimal::ZERO)
-            .ok_or_else(|| anyhow!("charge has no amount"))?;
+            .ok_or_else(|| refuse!("charge has no amount"))?;
         let charge_date = activity_date_in_user_timezone(charge.activity_date, timezone);
         if input.first_due <= charge_date {
-            return Err(anyhow!("first due date must be after the charge"));
+            return Err(refuse!("first due date must be after the charge"));
         }
         let name = input
             .name
@@ -454,7 +455,7 @@ impl MsiService {
             .find(|c| c.name.eq_ignore_ascii_case(MSI_CATEGORY_NAME))
             .map(|c| c.id.clone())
             .ok_or_else(|| {
-                anyhow!("create a spending category named \"{MSI_CATEGORY_NAME}\" and exclude it from spending first")
+                refuse!("create a spending category named \"{MSI_CATEGORY_NAME}\" and exclude it from spending first")
             })
     }
 }

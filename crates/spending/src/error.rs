@@ -27,3 +27,14 @@ pub enum SpendingError {
     #[error("{entity} not found: {id}")]
     NotFound { entity: &'static str, id: String },
 }
+
+/// A refusal the caller can fix, such as funding a deposit twice. The server
+/// answers it with 400 where a plain `anyhow!` would read as a 500.
+macro_rules! refuse {
+    ($($arg:tt)*) => {
+        anyhow::Error::new($crate::error::SpendingError::InvalidInput {
+            message: format!($($arg)*),
+        })
+    };
+}
+pub(crate) use refuse;
