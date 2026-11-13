@@ -924,18 +924,18 @@ const ActivityPage = () => {
 
   const views: SwipablePageView[] = [
     {
-      value: "investments",
-      label: t("activity:page.investments"),
-      icon: Icons.TrendingUp,
-      content: investmentContent,
-      actions: investmentActions,
-    },
-    {
       value: "spending",
       label: t("activity:page.spending"),
       icon: Icons.Wallet,
       content: <SpendingTransactionsTab ref={spendingTabRef} />,
       actions: spendingActions,
+    },
+    {
+      value: "investments",
+      label: t("activity:page.investments"),
+      icon: Icons.TrendingUp,
+      content: investmentContent,
+      actions: investmentActions,
     },
   ];
 
@@ -943,7 +943,7 @@ const ActivityPage = () => {
     <>
       <SwipablePage
         views={views}
-        defaultView="investments"
+        defaultView="spending"
         persistKey="activity-page-tab"
         desktopContentClassName="overflow-y-visible"
       />
