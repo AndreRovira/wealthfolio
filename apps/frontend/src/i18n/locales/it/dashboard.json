@@ -69,6 +69,7 @@
     "time_due": "Scadenza"
   },
   "tabs": {
+    "overview": "Panoramica",
     "investments": "Investimenti",
     "net_worth": "Patrimonio netto",
     "spending": "Spese"

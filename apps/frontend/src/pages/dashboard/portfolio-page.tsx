@@ -3,15 +3,19 @@ import { SwipablePage, SwipablePageView } from "@/components/page";
 import { AlternativeAssetQuickAddModal } from "@/pages/asset/alternative-assets/components";
 import { useNavigationMode } from "@/pages/layouts/navigation/navigation-mode-context";
 import { AlternativeAssetKind } from "@/lib/types";
+import { EnvelopesDashboardCard } from "@/features/spending/components/envelopes-dashboard-card";
+import { OverviewActivityCard } from "@/features/spending/components/overview-activity-card";
+import { ReconcileCard } from "@/features/spending/components/reconcile-card";
 import SpendingTabContent from "@/features/spending/components/spending-tab-content";
 import { useSpendingSettings } from "@/features/spending/hooks/use-spending-settings";
 import { Button, Icons, type Icon } from "@wealthfolio/ui";
 import { HandCoinsIcon } from "@phosphor-icons/react/dist/csr/HandCoins";
+import { HouseIcon } from "@phosphor-icons/react/dist/csr/House";
 import { TrendUpIcon } from "@phosphor-icons/react/dist/csr/TrendUp";
 import { WalletIcon } from "@phosphor-icons/react/dist/csr/Wallet";
 import { Card, CardContent, CardHeader } from "@wealthfolio/ui/components/ui/card";
 import { Skeleton } from "@wealthfolio/ui/components/ui/skeleton";
-import { Suspense, useCallback, useMemo, useState } from "react";
+import { Suspense, useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { NetWorthContent } from "../net-worth/net-worth-content";
 import { DashboardActions } from "./dashboard-actions";
@@ -20,6 +24,7 @@ import { useDashboardPortfolio } from "./use-dashboard-portfolio";
 import { DashboardContent } from "./dashboard-content";
 
 // Tab icons rendered as duotone Phosphor glyphs
+const OverviewTabIcon: Icon = (props) => <HouseIcon weight="duotone" {...props} />;
 const InvestmentsTabIcon: Icon = (props) => <TrendUpIcon weight="duotone" {...props} />;
 const NetWorthTabIcon: Icon = (props) => <WalletIcon weight="duotone" {...props} />;
 const SpendingTabIcon: Icon = (props) => <HandCoinsIcon weight="duotone" {...props} />;
@@ -114,8 +119,53 @@ export default function PortfolioPage() {
 
   const { isEnabled: spendingEnabled } = useSpendingSettings();
 
+  // Fork: the first tab. Net worth on top, then the latest movements beside
+  // the envelopes and the reconciliation; on a phone the envelopes come first.
+  const overviewCard = useRef<{ openAddForm: () => void }>(null);
+  const overviewActions = (
+    <>
+      {commonActions}
+      <Button
+        size="icon"
+        className="sm:hidden"
+        title={t("activity:add_transaction")}
+        aria-label={t("activity:add_transaction")}
+        onClick={() => overviewCard.current?.openAddForm()}
+      >
+        <Icons.Plus className="size-4" />
+      </Button>
+    </>
+  );
+  const overviewContent = (
+    <NetWorthContent>
+      <div className="flex flex-col gap-6 lg:grid lg:grid-cols-3 lg:gap-12">
+        <div className="order-2 lg:order-none lg:col-span-2">
+          <OverviewActivityCard ref={overviewCard} />
+        </div>
+        <div className="contents lg:block lg:space-y-6">
+          <div className="order-1 lg:order-none">
+            <EnvelopesDashboardCard
+              monthKey={new Date().toISOString().slice(0, 7)}
+              isCurrentMonth
+            />
+          </div>
+          <div className="order-3 lg:order-none">
+            <ReconcileCard />
+          </div>
+        </div>
+      </div>
+    </NetWorthContent>
+  );
+
   const views: SwipablePageView[] = useMemo(() => {
     const items: SwipablePageView[] = [
+      {
+        value: "overview",
+        label: t("dashboard:tabs.overview"),
+        icon: OverviewTabIcon,
+        content: <Suspense fallback={<PageLoader />}>{overviewContent}</Suspense>,
+        actions: overviewActions,
+      },
       {
         value: "investments",
         label: t("dashboard:tabs.investments"),
@@ -171,6 +221,8 @@ export default function PortfolioPage() {
     return items;
   }, [
     t,
+    overviewContent,
+    overviewActions,
     investmentActions,
     netWorthActions,
     commonActions,
@@ -185,11 +237,11 @@ export default function PortfolioPage() {
       <SwipablePage
         className="pt-0"
         views={views}
-        defaultView="investments"
+        defaultView="overview"
         withPadding={false}
         withMobileNavOffset={false}
         mobileActionsPlacement="header"
-        persistKey="dashboard-tab"
+        persistKey="dashboard-view"
       />
       <AlternativeAssetQuickAddModal
         open={isQuickAddOpen}

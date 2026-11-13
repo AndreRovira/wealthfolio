@@ -69,6 +69,7 @@
     "time_due": "Vence"
   },
   "tabs": {
+    "overview": "Visão geral",
     "investments": "Investimentos",
     "net_worth": "Patrimônio líquido",
     "spending": "Gastos"

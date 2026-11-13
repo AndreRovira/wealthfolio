@@ -68,6 +68,7 @@
     "time_due": "到期"
   },
   "tabs": {
+    "overview": "概览",
     "investments": "投资",
     "net_worth": "净资产",
     "spending": "支出"

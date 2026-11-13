@@ -69,6 +69,7 @@
     "time_due": "Vence"
   },
   "tabs": {
+    "overview": "Resumen",
     "investments": "Inversiones",
     "net_worth": "Patrimonio neto",
     "spending": "Gastos"

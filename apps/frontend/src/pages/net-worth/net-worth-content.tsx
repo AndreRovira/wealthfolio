@@ -24,7 +24,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@wealthfolio/ui/components/ui/tooltip";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { BreakdownTable } from "./components/breakdown-table";
@@ -54,7 +54,11 @@ const DEFAULT_INTERVAL: TimePeriod = "ALL";
 const INTERVAL_STORAGE_KEY = "networth-interval";
 const MS_PER_DAY = 86_400_000;
 
-export function NetWorthContent() {
+/**
+ * `children` replaces the cards under the chart: the dashboard's Overview tab
+ * shows the same headline and chart over its own cards.
+ */
+export function NetWorthContent({ children }: { children?: ReactNode }) {
   const { t } = useTranslation();
   const formatting = useNumberFormatting();
   const { settings } = useSettingsContext();
@@ -353,63 +357,65 @@ export function NetWorthContent() {
 
         {/* Content section */}
         <div className="grow px-4 pt-14 pb-[var(--mobile-nav-total-offset)] md:px-6 md:pt-12 md:pb-6 lg:px-10 lg:pt-14 lg:pb-8">
-          <div className="grid grid-cols-1 gap-8 lg:grid-cols-3 lg:gap-12">
-            {/* Left column: Breakdown */}
-            <div className="lg:col-span-2">
-              {isLoading || isHistoryLoading ? (
-                <DashboardCard title={t("insights:networth.breakdown")}>
-                  <div className="space-y-4">
-                    {Array.from({ length: 5 }).map((_, i) => (
-                      <div key={i} className="flex items-center justify-between">
-                        <Skeleton className="h-4 w-32" />
-                        <Skeleton className="h-4 w-24" />
-                      </div>
-                    ))}
-                  </div>
-                </DashboardCard>
-              ) : parsedData ? (
-                <BreakdownTable
-                  data={parsedData}
-                  history={parsedHistory}
-                  currency={currency}
-                  periodLabel={periodLabel}
-                  onSelect={setSelected}
-                />
-              ) : (
-                <div
-                  className="border-warning-subtle-border rounded-xl border p-6 text-center md:p-8"
-                  style={{ backgroundColor: THEME_COLOR_LIGHT }}
-                >
-                  <p className="text-sm">{t("insights:networth.no_assets_found")}</p>
-                  <Link
-                    to="/holdings"
-                    className="text-muted-foreground hover:text-foreground mt-2 inline-flex items-center gap-1 text-xs underline-offset-4 hover:underline"
+          {children ?? (
+            <div className="grid grid-cols-1 gap-8 lg:grid-cols-3 lg:gap-12">
+              {/* Left column: Breakdown */}
+              <div className="lg:col-span-2">
+                {isLoading || isHistoryLoading ? (
+                  <DashboardCard title={t("insights:networth.breakdown")}>
+                    <div className="space-y-4">
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <div key={i} className="flex items-center justify-between">
+                          <Skeleton className="h-4 w-32" />
+                          <Skeleton className="h-4 w-24" />
+                        </div>
+                      ))}
+                    </div>
+                  </DashboardCard>
+                ) : parsedData ? (
+                  <BreakdownTable
+                    data={parsedData}
+                    history={parsedHistory}
+                    currency={currency}
+                    periodLabel={periodLabel}
+                    onSelect={setSelected}
+                  />
+                ) : (
+                  <div
+                    className="border-warning-subtle-border rounded-xl border p-6 text-center md:p-8"
+                    style={{ backgroundColor: THEME_COLOR_LIGHT }}
                   >
-                    {t("insights:networth.add_first_asset")}
-                    <Icons.ChevronRight className="h-3 w-3 rtl:rotate-180" />
-                  </Link>
-                </div>
-              )}
+                    <p className="text-sm">{t("insights:networth.no_assets_found")}</p>
+                    <Link
+                      to="/holdings"
+                      className="text-muted-foreground hover:text-foreground mt-2 inline-flex items-center gap-1 text-xs underline-offset-4 hover:underline"
+                    >
+                      {t("insights:networth.add_first_asset")}
+                      <Icons.ChevronRight className="h-3 w-3 rtl:rotate-180" />
+                    </Link>
+                  </div>
+                )}
+              </div>
+
+              {/* Right column: insight cards */}
+              <div className="space-y-6 lg:col-span-1">
+                {velocity && (
+                  <VelocityCard
+                    velocity={velocity}
+                    trailingYearMonthly={trailingYearMonthly}
+                    currency={currency}
+                    periodLabel={localizedPeriodLabel}
+                  />
+                )}
+
+                {momentum && (
+                  <MomentumCard momentum={momentum} currency={currency} periodLabel={periodLabel} />
+                )}
+
+                <NetWorthAttention staleAssets={netWorthData?.staleAssets ?? []} />
+              </div>
             </div>
-
-            {/* Right column: insight cards */}
-            <div className="space-y-6 lg:col-span-1">
-              {velocity && (
-                <VelocityCard
-                  velocity={velocity}
-                  trailingYearMonthly={trailingYearMonthly}
-                  currency={currency}
-                  periodLabel={localizedPeriodLabel}
-                />
-              )}
-
-              {momentum && (
-                <MomentumCard momentum={momentum} currency={currency} periodLabel={periodLabel} />
-              )}
-
-              <NetWorthAttention staleAssets={netWorthData?.staleAssets ?? []} />
-            </div>
-          </div>
+          )}
         </div>
       </div>
 

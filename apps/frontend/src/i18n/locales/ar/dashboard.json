@@ -113,6 +113,7 @@
   "switch_to_list_view": "التبديل إلى عرض القائمة",
   "sync_portfolio": "مزامنة المحفظة",
   "tabs": {
+    "overview": "نظرة عامة",
     "investments": "الاستثمارات",
     "net_worth": "صافي الثروة",
     "spending": "الإنفاق"

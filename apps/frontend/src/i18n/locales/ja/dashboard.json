@@ -68,6 +68,7 @@
     "time_due": "期限"
   },
   "tabs": {
+    "overview": "概要",
     "investments": "投資",
     "net_worth": "純資産",
     "spending": "支出"

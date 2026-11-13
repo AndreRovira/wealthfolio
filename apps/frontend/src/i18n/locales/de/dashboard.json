@@ -68,6 +68,7 @@
     "time_due": "Fällig"
   },
   "tabs": {
+    "overview": "Übersicht",
     "investments": "Anlagen",
     "net_worth": "Nettovermögen",
     "spending": "Ausgaben"

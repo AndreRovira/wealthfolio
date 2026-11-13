@@ -68,6 +68,7 @@
     "time_due": "기한"
   },
   "tabs": {
+    "overview": "개요",
     "investments": "투자",
     "net_worth": "순자산",
     "spending": "지출"

@@ -69,6 +69,7 @@
     "time_due": "Échu"
   },
   "tabs": {
+    "overview": "Aperçu",
     "investments": "Investissements",
     "net_worth": "Valeur nette",
     "spending": "Dépenses"

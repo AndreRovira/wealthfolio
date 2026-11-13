@@ -68,6 +68,7 @@
     "time_due": "Due"
   },
   "tabs": {
+    "overview": "Overview",
     "investments": "Investments",
     "net_worth": "Net Worth",
     "spending": "Spending"

@@ -68,6 +68,7 @@
     "time_due": "已到期"
   },
   "tabs": {
+    "overview": "總覽",
     "investments": "投資",
     "net_worth": "淨資產",
     "spending": "支出"
