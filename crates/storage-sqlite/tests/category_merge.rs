@@ -374,6 +374,25 @@ async fn unrepresentable_budget_sums_reject_the_whole_merge_even_with_a_forged_c
 }
 
 #[tokio::test]
+async fn a_category_linked_to_an_envelope_is_not_merged() {
+    let f = Fixture::new().await;
+    let now = "2026-11-18T00:00:00Z";
+    f.seed(&format!(
+        "INSERT INTO envelopes (id,name,start_date,created_at,updated_at) VALUES ('env','Pot','2026-11-01','{now}','{now}');
+         INSERT INTO envelope_category_links (category_id,envelope_id,created_at) VALUES ('{SOURCE}','env','{now}');"
+    ));
+    let commit = f.prepared().await;
+    let error = f.service.commit(commit).await.unwrap_err();
+    assert!(error.to_string().contains("envelope"));
+    assert!(f.taxonomy.get_category(TAXONOMY, SOURCE).unwrap().is_some());
+
+    // Once unlinked, the same merge goes through.
+    f.seed("DELETE FROM envelope_category_links");
+    f.merge(SOURCE, DESTINATION).await;
+    assert!(f.taxonomy.get_category(TAXONOMY, SOURCE).unwrap().is_none());
+}
+
+#[tokio::test]
 async fn snapshot_roundtrip_preserves_redirects_and_does_not_restore_merged_seed_categories() {
     let source = Fixture::new().await;
     source.target("cat_other_expense", "default", "100").await;

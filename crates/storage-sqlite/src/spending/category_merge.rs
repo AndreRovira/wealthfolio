@@ -179,6 +179,24 @@ impl CategoryMergeRepositoryTrait for CategoryMergeRepository {
     }
 
     async fn commit(&self, request: CategoryMergeCommit) -> anyhow::Result<()> {
+        // Fork: the merge does not move envelope links, so a linked category would
+        // leave a link to nothing and its past spend would drop out of its pot.
+        {
+            use crate::schema::envelope_category_links::dsl as links;
+            use diesel::dsl::exists;
+            let mut conn = crate::db::get_connection(&self.pool)?;
+            let linked: bool = diesel::select(exists(
+                links::envelope_category_links.filter(links::category_id.eq(&request.category_id)),
+            ))
+            .get_result(&mut conn)?;
+            if linked {
+                return Err(anyhow::Error::new(
+                    wealthfolio_spending::error::SpendingError::Refused {
+                        message: "Unlink this category from its envelope before merging it".into(),
+                    },
+                ));
+            }
+        }
         self.writer
             .exec_tx(move |tx| {
                 let query = CategoryMergeRequest {
