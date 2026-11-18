@@ -215,7 +215,7 @@ function LiabilityCard({
       ? t("holdings:liability_cards.payments_progress", model.payments)
       : t(typeKey, { defaultValue: t("asset:altContent.liabilityType.other") }),
     model.rate != null
-      ? `${numbers.formatDecimal(model.rate, { maximumFractionDigits: 2 })}%`
+      ? numbers.formatDecimal(model.rate / 100, { style: "percent", maximumFractionDigits: 2 })
       : null,
     model.scheduled
       ? payoff &&

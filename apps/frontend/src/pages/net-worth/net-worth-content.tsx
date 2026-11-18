@@ -6,6 +6,7 @@ import { formatDateISO, parseLocalDate } from "@/lib/utils";
 import Balance from "@/pages/dashboard/balance";
 import { AllocationDetailSheet } from "@/pages/holdings/components/allocation-detail-sheet";
 import { DashboardCard } from "@/components/dashboard-card";
+import { HealthStatusIndicator } from "@/components/health-status-icon";
 import { PrivacyToggle } from "@/components/privacy-toggle";
 import {
   GainAmount,
@@ -15,15 +16,11 @@ import {
   type TimePeriod,
 } from "@wealthfolio/ui";
 import { SpendingDatePicker } from "@/features/spending/components/spending-date-picker";
+import { PeriodNavigation } from "@/features/spending/components/period-navigation";
 import { useDashboardPeriod } from "@/pages/dashboard/use-dashboard-period";
+import { yearRange } from "@/features/spending/lib/year-period";
 import { Icons } from "@wealthfolio/ui/components/ui/icons";
 import { Skeleton } from "@wealthfolio/ui/components/ui/skeleton";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@wealthfolio/ui/components/ui/tooltip";
 import { useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
@@ -95,11 +92,14 @@ export function NetWorthContent({ children }: { children?: ReactNode }) {
     if (!dateRange?.from || periodCode === "ALL") return null;
     const end = dateRange.to ?? currentDate;
     const rangeMs = end.getTime() - dateRange.from.getTime();
-    const priorStart = new Date(dateRange.from.getTime() - rangeMs);
+    const priorStart =
+      period.customYear !== null
+        ? yearRange(period.customYear - 1).from
+        : new Date(dateRange.from.getTime() - rangeMs);
     const yearStart = new Date(end.getTime() - 366 * MS_PER_DAY);
     const start = priorStart < yearStart ? priorStart : yearStart;
     return { startDate: formatDateISO(start), endDate: formatDateISO(end) };
-  }, [currentDate, dateRange, periodCode]);
+  }, [currentDate, dateRange, periodCode, period.customYear]);
 
   const { data: historyData, isLoading: isHistoryLoading } = useNetWorthHistory({
     startDate: historyDates?.startDate ?? "",
@@ -162,8 +162,13 @@ export function NetWorthContent({ children }: { children?: ReactNode }) {
   }, [longHistory, periodCode, currentDate, velocity]);
   const momentum = useMemo(() => {
     if (!historyDates || periodCode === "ALL") return null;
-    return computeMomentum(longHistory, historyDates.startDate, historyDates.endDate);
-  }, [longHistory, historyDates, periodCode]);
+    return computeMomentum(
+      longHistory,
+      historyDates.startDate,
+      historyDates.endDate,
+      period.customYear,
+    );
+  }, [longHistory, historyDates, periodCode, period.customYear]);
 
   // Net worth change over the selected range, on the same baseline rules as the
   // breakdown rows so the header and the table agree.
@@ -184,7 +189,6 @@ export function NetWorthContent({ children }: { children?: ReactNode }) {
     parsedHistory[parsedHistory.length - 1].netWorth >= 0;
 
   const currency = netWorthData?.currency || settings?.baseCurrency || "USD";
-  const hasStaleValuations = netWorthData && netWorthData.staleAssets.length > 0;
   const periodLabel = periodCode ?? period.label;
   const localizedPeriodLabel = period.label;
 
@@ -210,6 +214,10 @@ export function NetWorthContent({ children }: { children?: ReactNode }) {
             {t("insights:networth.failed_to_load")}
           </p>
           <p className="text-muted-foreground mt-2 text-sm">{error?.message}</p>
+          {/* Health Center usually explains why the figure failed to load. */}
+          <div className="mt-4 flex justify-center">
+            <HealthStatusIndicator />
+          </div>
         </div>
       </div>
     );
@@ -218,10 +226,27 @@ export function NetWorthContent({ children }: { children?: ReactNode }) {
   return (
     <div className="flex min-h-full flex-col">
       {/* Top section: Net Worth value */}
-      <div className="px-4 pt-2 pb-1 md:px-6 md:pb-2 lg:px-8">
+      <div className="px-4 pt-2 pb-6 md:px-6 md:pb-2 lg:px-8">
         <div className="flex items-start gap-2">
-          <div>
+          <div className="min-w-0">
+            <div
+              className="flex max-w-full flex-wrap items-center gap-x-1"
+              data-testid="dashboard-period-header"
+            >
+              <div
+                className="text-muted-foreground/80 text-2xs font-semibold tracking-[0.12em] uppercase"
+                data-testid="dashboard-period-caption"
+              >
+                {t("dashboard:tabs.net_worth")} · {localizedPeriodLabel}
+              </div>
+              <PeriodNavigation navigation={period.navigation} />
+            </div>
             <div className="flex flex-wrap items-center gap-2">
+              {period.isHistorical && (
+                <span className="text-muted-foreground w-full text-xs">
+                  {t("common:currentValue")}
+                </span>
+              )}
               <Balance
                 isLoading={isLoading}
                 targetValue={parsedData?.netWorth ?? 0}
@@ -232,39 +257,9 @@ export function NetWorthContent({ children }: { children?: ReactNode }) {
                 compact={false}
               />
               <PrivacyToggle variant="ghost" />
-              {hasStaleValuations && (
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={
-                        <div className="text-warning-subtle-foreground flex h-8 w-8 items-center justify-center rounded-full bg-current/15" />
-                      }
-                    >
-                      <Icons.AlertCircle className="h-4 w-4" />
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" className="max-w-70">
-                      <p className="mb-2 text-xs font-medium">
-                        {t("insights:networth.stale_valuations_tooltip")}
-                      </p>
-                      <ul className="space-y-1 text-xs">
-                        {netWorthData?.staleAssets.map((asset) => (
-                          <li
-                            key={asset.assetId}
-                            className="flex items-center justify-between gap-2"
-                          >
-                            <span className="truncate">{asset.name ?? asset.assetId}</span>
-                            <span className="text-background/70 shrink-0">
-                              {t("insights:networth.days_ago", { count: asset.daysStale })}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              )}
+              <HealthStatusIndicator />
             </div>
-            <div className="text-md flex space-x-3">
+            <div className="text-md flex min-h-5 flex-wrap items-center gap-x-3">
               {isHistoryLoading ? (
                 <div className="flex items-center gap-3 pt-1">
                   <Skeleton className="h-4 w-24" />
@@ -303,9 +298,13 @@ export function NetWorthContent({ children }: { children?: ReactNode }) {
                   )}
                 </>
               )}
-              <span className="lg:text-md text-muted-foreground ms-1 text-sm font-light">
-                {localizedPeriodLabel}
-              </span>
+              {period.isHistorical && (
+                <span className="text-muted-foreground text-sm font-light">
+                  {t("insights:networth.breakdown_table.change_over", {
+                    period: localizedPeriodLabel,
+                  })}
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -341,11 +340,17 @@ export function NetWorthContent({ children }: { children?: ReactNode }) {
                   className="w-auto"
                   onIntervalSelect={period.selectPreset}
                   isLoading={isHistoryLoading}
-                  value={periodCode}
+                  value={period.selectedPreset}
                 />
                 <SpendingDatePicker
                   customMonth={period.customMonth}
                   customRange={period.customRange}
+                  customYear={period.customYear}
+                  maxYear={period.maxYear}
+                  onCustomYearChange={period.selectYear}
+                  selectionLabel={
+                    period.customMonth || period.customYear !== null ? period.label : undefined
+                  }
                   maxMonth={period.maxMonth}
                   onCustomMonthChange={period.selectMonth}
                   onCustomRangeChange={period.selectRange}

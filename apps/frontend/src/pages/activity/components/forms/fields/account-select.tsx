@@ -20,6 +20,8 @@ export interface AccountSelectOption {
   accountType?: string;
   /** The account's raw meta (fork: trade fee percentages live there). */
   meta?: string;
+  /** The account's group, which a phone's account list is sorted under. */
+  group?: string;
   /** Activity restriction level based on account tracking mode. */
   restrictionLevel?: "none" | "limited" | "blocked";
 }
