@@ -11,9 +11,7 @@ const CARD = "bg-card border-border/60 rounded-xl border shadow-sm";
 
 /** Rules with fixed lines are the paycheck plan: net in, lines out, rest over. */
 function planRules(snapshot: EnvelopeSnapshot) {
-  return snapshot.rules.filter(
-    (r) => r.active && r.splits.some((s) => s.amount != null),
-  );
+  return snapshot.rules.filter((r) => r.active && r.splits.some((s) => s.amount != null));
 }
 
 function PlanRows({ rule, snapshot }: { rule: FundingRule; snapshot: EnvelopeSnapshot }) {
@@ -100,7 +98,7 @@ export function PaycheckPlanCard({ snapshot }: { snapshot: EnvelopeSnapshot }) {
   if (rules.length === 0) return null;
   return (
     <section className={cn(CARD, "divide-border/40 divide-y")}>
-      <div className="text-muted-foreground px-4 pt-3 text-2xs uppercase tracking-wide">
+      <div className="text-muted-foreground text-2xs px-4 pt-3 tracking-wide uppercase">
         {t("spending:envelopes.plan.title")}
       </div>
       {rules.map((r) => (

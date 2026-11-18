@@ -113,7 +113,7 @@ function evaluate(src: string, lookup: (name: string) => number): number {
   const next = () => toks[p++];
   const expr = (): number => {
     let v = term();
-    while (peek()?.t === "op" && (peek() as { v: string }).v.match(/[+-]/)) {
+    while (peek()?.t === "op" && /[+-]/.exec((peek() as { v: string }).v)) {
       const op = (next() as { v: string }).v;
       const r = term();
       v = op === "+" ? v + r : v - r;
@@ -122,7 +122,7 @@ function evaluate(src: string, lookup: (name: string) => number): number {
   };
   const term = (): number => {
     let v = unary();
-    while (peek()?.t === "op" && (peek() as { v: string }).v.match(/[*/]/)) {
+    while (peek()?.t === "op" && /[*/]/.exec((peek() as { v: string }).v)) {
       const op = (next() as { v: string }).v;
       const r = unary();
       v = op === "*" ? v * r : v / r;

@@ -87,8 +87,7 @@ export interface MoveInput {
   note?: string | null;
 }
 
-export type FundingCadence =
-  "biweekly" | "semimonthly" | "monthly" | "on_income";
+export type FundingCadence = "biweekly" | "semimonthly" | "monthly" | "on_income";
 
 export interface FundingSplit {
   envelopeId: string;

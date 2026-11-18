@@ -47,16 +47,27 @@ export function ReconcileCard() {
       )}
       <div className="grid gap-3 text-xs sm:grid-cols-2">
         <div>
-          <div className="text-muted-foreground text-2xs uppercase tracking-wide">
+          <div className="text-muted-foreground text-2xs tracking-wide uppercase">
             {t("spending:reconcile.difference")}
           </div>
-          <div className={cn("flex items-center gap-1 text-sm font-semibold tabular-nums", ok ? "text-success" : "text-destructive")}>
-            {ok ? <Icons.Check className="h-3.5 w-3.5" /> : <Icons.AlertTriangle className="h-3.5 w-3.5" />}
+          <div
+            className={cn(
+              "flex items-center gap-1 text-sm font-semibold tabular-nums",
+              ok ? "text-success" : "text-destructive",
+            )}
+          >
+            {ok ? (
+              <Icons.Check className="h-3.5 w-3.5" />
+            ) : (
+              <Icons.AlertTriangle className="h-3.5 w-3.5" />
+            )}
             <PrivacyAmount value={data.difference} currency={data.currency} />
           </div>
         </div>
         <div>
-          <div className="text-muted-foreground text-2xs uppercase tracking-wide">{t("spending:reconcile.float")}</div>
+          <div className="text-muted-foreground text-2xs tracking-wide uppercase">
+            {t("spending:reconcile.float")}
+          </div>
           <div className="text-sm font-semibold tabular-nums">
             <PrivacyAmount value={data.float} currency={data.currency} />
           </div>

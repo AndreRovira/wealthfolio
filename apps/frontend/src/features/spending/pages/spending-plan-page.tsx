@@ -161,13 +161,23 @@ export default function SpendingPlanPage() {
   );
   // Same swipeable tabs as the dashboard and holdings pages.
   const views: SwipablePageView[] = [
-    { value: "income", label: t("spending:plan.tabIncome"), icon: Icons.DollarSign, content: editor(false) },
+    {
+      value: "income",
+      label: t("spending:plan.tabIncome"),
+      icon: Icons.DollarSign,
+      content: editor(false),
+    },
     {
       value: "paycheck",
       label: t("spending:plan.tabPaycheck"),
       icon: Icons.Banknote,
       content: pane(snapshot.data && doc, () => (
-        <PaycheckTab snapshot={snapshot.data!} plan={doc!} external={external} dirty={draft !== null} />
+        <PaycheckTab
+          snapshot={snapshot.data!}
+          plan={doc!}
+          external={external}
+          dirty={draft !== null}
+        />
       )),
     },
     {
@@ -176,7 +186,12 @@ export default function SpendingPlanPage() {
       icon: Icons.Receipt,
       content: pane(snapshot.data, () => <BillsTab snapshot={snapshot.data!} />),
     },
-    { value: "savings", label: t("spending:plan.tabSavings"), icon: Icons.PiggyBank, content: editor(true) },
+    {
+      value: "savings",
+      label: t("spending:plan.tabSavings"),
+      icon: Icons.PiggyBank,
+      content: editor(true),
+    },
     {
       value: "reconcile",
       label: t("spending:plan.tabReconcile"),
@@ -282,7 +297,9 @@ function IncomeEditor({
         {hasErrors ? (
           <span className="text-destructive text-xs">{t("spending:plan.fixErrors")}</span>
         ) : (
-          dirty && <span className="text-muted-foreground text-xs">{t("spending:plan.unsaved")}</span>
+          dirty && (
+            <span className="text-muted-foreground text-xs">{t("spending:plan.unsaved")}</span>
+          )
         )}
         {/* A line in error would save as zero and pull the paycheck split with it. */}
         <Button size="sm" onClick={onSave} disabled={!dirty || saving || hasErrors}>
@@ -339,19 +356,31 @@ function IncomeEditor({
               )}
             </div>
             <table className="hidden w-full text-xs sm:table">
-              <thead className="text-muted-foreground text-2xs uppercase tracking-wide">
+              <thead className="text-muted-foreground text-2xs tracking-wide uppercase">
                 <tr>
                   <th className="px-4 py-2 text-start font-normal">{t("spending:plan.colName")}</th>
-                  <th className="px-2 py-2 text-start font-normal">{t("spending:plan.colBasis")}</th>
-                  <th className="px-2 py-2 text-start font-normal">{t("spending:plan.colAmountOrFormula")}</th>
-                  <th className="px-2 py-2 text-end font-normal">{t("spending:plan.colQuincena")}</th>
-                  <th className="px-2 py-2 text-end font-normal">{t("spending:plan.colMonthly")}</th>
+                  <th className="px-2 py-2 text-start font-normal">
+                    {t("spending:plan.colBasis")}
+                  </th>
+                  <th className="px-2 py-2 text-start font-normal">
+                    {t("spending:plan.colAmountOrFormula")}
+                  </th>
+                  <th className="px-2 py-2 text-end font-normal">
+                    {t("spending:plan.colQuincena")}
+                  </th>
+                  <th className="px-2 py-2 text-end font-normal">
+                    {t("spending:plan.colMonthly")}
+                  </th>
                   <th className="px-2 py-2 text-end font-normal">{t("spending:plan.colAnnual")}</th>
                   {block === "net" && (
-                    <th className="px-2 py-2 text-end font-normal">{t("spending:plan.colWithheld")}</th>
+                    <th className="px-2 py-2 text-end font-normal">
+                      {t("spending:plan.colWithheld")}
+                    </th>
                   )}
                   {block === "base" && (
-                    <th className="px-2 py-2 text-center font-normal">{t("spending:plan.colPaycheck")}</th>
+                    <th className="px-2 py-2 text-center font-normal">
+                      {t("spending:plan.colPaycheck")}
+                    </th>
                   )}
                   <th className="w-8" />
                 </tr>
@@ -415,10 +444,7 @@ function IncomeEditor({
           }
         />
       ) : (
-        <ConstantsEditor
-          doc={doc}
-          onChange={(constants) => update((d) => ({ ...d, constants }))}
-        />
+        <ConstantsEditor doc={doc} onChange={(constants) => update((d) => ({ ...d, constants }))} />
       )}
       <p className="text-muted-foreground text-2xs">
         {t(savings ? "spending:plan.savingsHelp" : "spending:plan.formulaHelp")}
@@ -448,7 +474,11 @@ function LineRow({
   const withheld = gross !== null && value ? round2(gross - value.monthly) : null;
   const cell = (v: number | undefined) => (
     <td className="px-2 py-1.5 text-end tabular-nums">
-      {v === undefined ? <span className="text-destructive">—</span> : <PrivacyAmount value={v} currency={currency} />}
+      {v === undefined ? (
+        <span className="text-destructive">—</span>
+      ) : (
+        <PrivacyAmount value={v} currency={currency} />
+      )}
     </td>
   );
   return (
@@ -462,7 +492,7 @@ function LineRow({
             onChange({ name: e.target.value });
           }}
         />
-        <div className="text-muted-foreground mt-0.5 font-mono text-2xs">
+        <div className="text-muted-foreground text-2xs mt-0.5 font-mono">
           {line.block}.{line.key}
         </div>
       </td>
@@ -478,7 +508,7 @@ function LineRow({
         <div className="flex items-center gap-1">
           <button
             type="button"
-            className="text-muted-foreground hover:text-foreground font-mono text-2xs"
+            className="text-muted-foreground hover:text-foreground text-2xs font-mono"
             title={t("spending:plan.toggleFormula")}
             onClick={() =>
               onChange(
@@ -502,11 +532,13 @@ function LineRow({
               step="0.01"
               value={line.amount ?? ""}
               className="h-7 text-end text-xs tabular-nums"
-              onChange={(e) => onChange({ amount: e.target.value === "" ? null : Number(e.target.value) })}
+              onChange={(e) =>
+                onChange({ amount: e.target.value === "" ? null : Number(e.target.value) })
+              }
             />
           )}
         </div>
-        {error && <div className="text-destructive mt-0.5 text-2xs">{error}</div>}
+        {error && <div className="text-destructive text-2xs mt-0.5">{error}</div>}
       </td>
       {cell(value?.quincena)}
       {cell(value?.monthly)}
@@ -579,7 +611,7 @@ function LineCard(props: LineProps) {
           <span className="text-foreground block font-medium">
             <PrivacyAmount value={value.annual} currency={props.currency} />
           </span>
-          <span className="text-muted-foreground block text-2xs">
+          <span className="text-muted-foreground text-2xs block">
             <PrivacyAmount value={value.quincena} currency={props.currency} /> ·{" "}
             <PrivacyAmount value={value.monthly} currency={props.currency} />
           </span>
@@ -612,7 +644,9 @@ function LineCardEditor({
     </div>
   );
   return (
-    <div className={cn("border-border/40 rounded-lg border p-2 text-xs", error && "bg-destructive/5")}>
+    <div
+      className={cn("border-border/40 rounded-lg border p-2 text-xs", error && "bg-destructive/5")}
+    >
       <div className="flex items-center gap-2">
         <Input
           value={line.name}
@@ -628,28 +662,44 @@ function LineCardEditor({
           options={BASES.map((b) => ({ value: b, label: t(`spending:plan.basis_${b}`) }))}
           triggerClassName="h-8 w-28 text-xs"
         />
-        <button type="button" className="text-muted-foreground hover:text-destructive p-1.5" onClick={onRemove} aria-label={t("common:delete")}>
+        <button
+          type="button"
+          className="text-muted-foreground hover:text-destructive p-1.5"
+          onClick={onRemove}
+          aria-label={t("common:delete")}
+        >
           <Icons.Trash className="h-4 w-4" />
         </button>
-        <button type="button" className="text-muted-foreground hover:text-foreground p-1.5" onClick={onCollapse} aria-label={t("common:close")}>
+        <button
+          type="button"
+          className="text-muted-foreground hover:text-foreground p-1.5"
+          onClick={onCollapse}
+          aria-label={t("common:close")}
+        >
           <Icons.ChevronUp className="h-4 w-4" />
         </button>
       </div>
       <div className="mt-1.5 flex items-center gap-1.5">
         <button
           type="button"
-          className="text-muted-foreground hover:text-foreground w-6 font-mono text-2xs"
+          className="text-muted-foreground hover:text-foreground text-2xs w-6 font-mono"
           title={t("spending:plan.toggleFormula")}
           onClick={() =>
             onChange(
-              isFormula ? { formula: null, amount: value?.raw ?? 0 } : { formula: String(line.amount ?? 0), amount: null },
+              isFormula
+                ? { formula: null, amount: value?.raw ?? 0 }
+                : { formula: String(line.amount ?? 0), amount: null },
             )
           }
         >
           {isFormula ? "fx" : "#"}
         </button>
         {isFormula ? (
-          <Input value={line.formula ?? ""} className="h-8 flex-1 font-mono text-xs" onChange={(e) => onChange({ formula: e.target.value })} />
+          <Input
+            value={line.formula ?? ""}
+            className="h-8 flex-1 font-mono text-xs"
+            onChange={(e) => onChange({ formula: e.target.value })}
+          />
         ) : (
           <Input
             type="number"
@@ -657,28 +707,36 @@ function LineCardEditor({
             inputMode="decimal"
             value={line.amount ?? ""}
             className="h-8 flex-1 text-end text-xs tabular-nums"
-            onChange={(e) => onChange({ amount: e.target.value === "" ? null : Number(e.target.value) })}
+            onChange={(e) =>
+              onChange({ amount: e.target.value === "" ? null : Number(e.target.value) })
+            }
           />
         )}
         {block === "base" && (
-          <label className="text-muted-foreground flex items-center gap-1 text-2xs">
-            <Checkbox checked={line.inPaycheck} onCheckedChange={(v) => onChange({ inPaycheck: Boolean(v) })} />
+          <label className="text-muted-foreground text-2xs flex items-center gap-1">
+            <Checkbox
+              checked={line.inPaycheck}
+              onCheckedChange={(v) => onChange({ inPaycheck: Boolean(v) })}
+            />
             {t("spending:plan.colPaycheck")}
           </label>
         )}
       </div>
-      {error && <div className="text-destructive mt-1 text-2xs">{error}</div>}
+      {error && <div className="text-destructive text-2xs mt-1">{error}</div>}
       <div className="mt-1.5 grid grid-cols-3 gap-2">
         {fig(t("spending:plan.colQuincena"), value?.quincena)}
         {fig(t("spending:plan.colMonthly"), value?.monthly)}
         {fig(t("spending:plan.colAnnual"), value?.annual)}
       </div>
       {block === "net" && withheld !== null && gross ? (
-        <div className="text-muted-foreground mt-1 text-2xs">
-          {t("spending:plan.colWithheld")}: <PrivacyAmount value={withheld} currency={currency} /> ({((withheld / gross) * 100).toFixed(1)}%)
+        <div className="text-muted-foreground text-2xs mt-1">
+          {t("spending:plan.colWithheld")}: <PrivacyAmount value={withheld} currency={currency} /> (
+          {((withheld / gross) * 100).toFixed(1)}%)
         </div>
       ) : null}
-      <div className="text-muted-foreground mt-1 font-mono text-2xs">{line.block}.{line.key}</div>
+      <div className="text-muted-foreground text-2xs mt-1 font-mono">
+        {line.block}.{line.key}
+      </div>
     </div>
   );
 }
@@ -718,23 +776,23 @@ function LiquidityCard({
 }) {
   const { t } = useTranslation();
   const totals = liquidityYield(rows);
-  const sorted = [...rows].sort(
-    (a, b) => (b.rate ?? -1) - (a.rate ?? -1) || b.balance - a.balance,
-  );
+  const sorted = [...rows].sort((a, b) => (b.rate ?? -1) - (a.rate ?? -1) || b.balance - a.balance);
   return (
     <section className={cn(CARD, "overflow-x-auto")}>
       <h3 className="text-foreground px-4 pt-3 text-sm font-semibold">
         {t("spending:plan.liquidityTitle")}
       </h3>
       <table className="w-full text-xs">
-        <thead className="text-muted-foreground text-2xs uppercase tracking-wide">
+        <thead className="text-muted-foreground text-2xs tracking-wide uppercase">
           <tr>
             <th className="px-4 py-2 text-start font-normal">{t("spending:plan.colAccount")}</th>
             <th className="hidden px-2 py-2 text-end font-normal sm:table-cell">
               {t("spending:plan.colBalance")}
             </th>
             <th className="px-2 py-2 text-end font-normal">{t("spending:plan.colRate")}</th>
-            <th className="px-4 py-2 text-end font-normal">{t("spending:plan.colMonthlyIncome")}</th>
+            <th className="px-4 py-2 text-end font-normal">
+              {t("spending:plan.colMonthlyIncome")}
+            </th>
           </tr>
         </thead>
         <tbody className="divide-border/40 divide-y">
@@ -742,7 +800,7 @@ function LiquidityCard({
             <tr key={r.id} className={cn(r.rate == null && "text-muted-foreground")}>
               <td className="px-4 py-1.5">
                 {r.name}
-                <span className="text-muted-foreground block text-2xs tabular-nums sm:hidden">
+                <span className="text-muted-foreground text-2xs block tabular-nums sm:hidden">
                   <PrivacyAmount value={r.balance} currency={currency} />
                 </span>
               </td>
@@ -780,7 +838,7 @@ function LiquidityCard({
           <tr>
             <td className="px-4 py-2">
               {t("spending:plan.total")}
-              <span className="block text-2xs font-normal tabular-nums sm:hidden">
+              <span className="text-2xs block font-normal tabular-nums sm:hidden">
                 <PrivacyAmount value={totals.total} currency={currency} />
               </span>
             </td>
@@ -794,7 +852,7 @@ function LiquidityCard({
           </tr>
         </tfoot>
       </table>
-      <p className="text-muted-foreground px-4 pb-3 text-2xs">{t("spending:plan.liquidityHint")}</p>
+      <p className="text-muted-foreground text-2xs px-4 pb-3">{t("spending:plan.liquidityHint")}</p>
     </section>
   );
 }
@@ -944,7 +1002,9 @@ function PaycheckTab({
 
   const line = (label: string, v: number, strong?: boolean, minus?: boolean) => (
     <div className="flex items-center justify-between text-xs">
-      <span className={strong ? "text-foreground font-medium" : "text-muted-foreground"}>{label}</span>
+      <span className={strong ? "text-foreground font-medium" : "text-muted-foreground"}>
+        {label}
+      </span>
       <span className={cn("tabular-nums", strong && "font-semibold")}>
         {minus ? "− " : ""}
         <PrivacyAmount value={v} currency={snapshot.currency} />
@@ -955,22 +1015,33 @@ function PaycheckTab({
   return (
     <div className="space-y-4">
       <section className={cn(CARD, "space-y-1.5 p-4")}>
-        <h3 className="text-foreground mb-2 text-sm font-semibold">{t("spending:plan.paycheckMath")}</h3>
+        <h3 className="text-foreground mb-2 text-sm font-semibold">
+          {t("spending:plan.paycheckMath")}
+        </h3>
         {line(t("spending:plan.expectedFromPlan"), expected, true)}
         {line(t("spending:plan.fixedOtherLines"), fixedOthers, false, true)}
         <div className="flex items-center gap-2 pt-1">
-          <span className="text-muted-foreground text-xs">{t("spending:plan.remainderGoesTo")}</span>
+          <span className="text-muted-foreground text-xs">
+            {t("spending:plan.remainderGoesTo")}
+          </span>
           <ResponsiveSelect
             value={remainderId}
             onValueChange={setRemainderId}
-            options={snapshot.envelopes.map((e) => ({ value: e.envelope.id, label: e.envelope.name }))}
+            options={snapshot.envelopes.map((e) => ({
+              value: e.envelope.id,
+              label: e.envelope.name,
+            }))}
             placeholder={t("spending:envelopes.pickPot")}
             triggerClassName="h-7 w-48 text-xs"
           />
         </div>
         {remainder && (
           <>
-            {line(t("spending:plan.remainderShouldBe", { name: envelopeName(remainder) }), shouldBe, true)}
+            {line(
+              t("spending:plan.remainderShouldBe", { name: envelopeName(remainder) }),
+              shouldBe,
+              true,
+            )}
             {line(t("spending:plan.ruleHasNow"), currentRemainder)}
             {automatic ? (
               <div className="text-success pt-1 text-xs">{t("spending:plan.inSync")}</div>
@@ -986,7 +1057,11 @@ function PaycheckTab({
                     t("spending:plan.notLinked")
                   )}
                 </span>
-                {dirty && <span className="text-muted-foreground text-2xs">{t("spending:plan.unsaved")}</span>}
+                {dirty && (
+                  <span className="text-muted-foreground text-2xs">
+                    {t("spending:plan.unsaved")}
+                  </span>
+                )}
                 {/* Never write a remainder worked out from a missing or negative paycheck. */}
                 <Button
                   size="sm"
@@ -1000,7 +1075,7 @@ function PaycheckTab({
           </>
         )}
         {missing.map((s, i) => (
-          <p key={i} className="text-destructive pt-1 text-2xs">
+          <p key={i} className="text-destructive text-2xs pt-1">
             {t("spending:plan.missingRef", {
               line: s.label || envelopeName(s.envelopeId),
               ref: planRef(s),
@@ -1008,7 +1083,7 @@ function PaycheckTab({
           </p>
         ))}
         {expected === 0 && (
-          <p className="text-muted-foreground pt-1 text-2xs">{t("spending:plan.flagLinesHint")}</p>
+          <p className="text-muted-foreground text-2xs pt-1">{t("spending:plan.flagLinesHint")}</p>
         )}
       </section>
       <PaycheckPlanCard snapshot={snapshot} />
@@ -1025,7 +1100,8 @@ function BillsTab({ snapshot }: { snapshot: EnvelopeSnapshot }) {
     .flatMap((e) => e.bills.map((b) => ({ b, envelope: e.envelope.name })))
     .map(({ b, envelope }) => ({ b, envelope, ...billShares(b.bill.expectedAmount, b.bill.cycle) }))
     .sort((a, b) => b.annual - a.annual);
-  const total = (k: "quincena" | "monthly" | "annual") => round2(rows.reduce((s, r) => s + r[k], 0));
+  const total = (k: "quincena" | "monthly" | "annual") =>
+    round2(rows.reduce((s, r) => s + r[k], 0));
   const num = (v: number, cls?: string) => (
     <td className={cn("px-2 py-1.5 text-end tabular-nums", cls)}>
       <PrivacyAmount value={v} currency={currency} />
@@ -1058,20 +1134,30 @@ function BillsTab({ snapshot }: { snapshot: EnvelopeSnapshot }) {
                   <PrivacyAmount value={annual} currency={currency} />
                 </div>
                 <div className="text-muted-foreground text-2xs tabular-nums">
-                  <PrivacyAmount value={quincena} currency={currency} /> · <PrivacyAmount value={monthly} currency={currency} />
+                  <PrivacyAmount value={quincena} currency={currency} /> ·{" "}
+                  <PrivacyAmount value={monthly} currency={currency} />
                 </div>
               </div>
             </div>
-            <div className="mt-1 flex items-center justify-between gap-2 text-2xs">
+            <div className="text-2xs mt-1 flex items-center justify-between gap-2">
               <span
                 className={cn(
-                  b.state === "overdue" ? "text-destructive" : b.state === "ready" ? "text-success" : "text-muted-foreground",
+                  b.state === "overdue"
+                    ? "text-destructive"
+                    : b.state === "ready"
+                      ? "text-success"
+                      : "text-muted-foreground",
                 )}
               >
                 {b.bill.nextDue ?? "—"} · {stateText(b)}
                 {b.state === "ready" && ` · ${t("spending:envelopes.ready")}`}
               </span>
-              <span className={cn("tabular-nums", b.balance < 0 ? "text-destructive" : b.state === "ready" ? "text-success" : "")}>
+              <span
+                className={cn(
+                  "tabular-nums",
+                  b.balance < 0 ? "text-destructive" : b.state === "ready" ? "text-success" : "",
+                )}
+              >
                 <PrivacyAmount value={b.balance} currency={currency} />
               </span>
             </div>
@@ -1085,7 +1171,7 @@ function BillsTab({ snapshot }: { snapshot: EnvelopeSnapshot }) {
         </div>
       </div>
       <table className="hidden w-full text-xs sm:table">
-        <thead className="text-muted-foreground text-2xs uppercase tracking-wide">
+        <thead className="text-muted-foreground text-2xs tracking-wide uppercase">
           <tr>
             <th className="px-4 py-2 text-start font-normal">{t("spending:plan.tabBills")}</th>
             <th className="px-2 py-2 text-start font-normal">{t("spending:envelopes.cycle")}</th>
@@ -1137,7 +1223,10 @@ function BillsTab({ snapshot }: { snapshot: EnvelopeSnapshot }) {
                   {b.state === "ready" && ` · ${t("spending:envelopes.ready")}`}
                 </div>
               </td>
-              {num(b.balance, b.balance < 0 ? "text-destructive" : b.state === "ready" ? "text-success" : "")}
+              {num(
+                b.balance,
+                b.balance < 0 ? "text-destructive" : b.state === "ready" ? "text-success" : "",
+              )}
             </tr>
           ))}
         </tbody>
@@ -1179,9 +1268,15 @@ function ReconcileTab({
   if (!data) return isLoading ? <Skeleton className="h-40 w-full" /> : null;
   const tol = Number(tolerance) || 0;
   const ok = Math.abs(data.difference) <= tol;
-  const line = (label: string, v: number, opts?: { strong?: boolean; minus?: boolean; cls?: string }) => (
+  const line = (
+    label: string,
+    v: number,
+    opts?: { strong?: boolean; minus?: boolean; cls?: string },
+  ) => (
     <div className="flex items-center justify-between text-xs">
-      <span className={opts?.strong ? "text-foreground font-medium" : "text-muted-foreground"}>{label}</span>
+      <span className={opts?.strong ? "text-foreground font-medium" : "text-muted-foreground"}>
+        {label}
+      </span>
       <span className={cn("tabular-nums", opts?.strong && "font-semibold", opts?.cls)}>
         {opts?.minus ? "− " : ""}
         <PrivacyAmount value={v} currency={data.currency} />
@@ -1192,7 +1287,10 @@ function ReconcileTab({
     list.map((r) => (
       <div
         key={r.account.id}
-        className={cn("flex items-center justify-between text-xs", r.excluded && "text-muted-foreground line-through")}
+        className={cn(
+          "flex items-center justify-between text-xs",
+          r.excluded && "text-muted-foreground line-through",
+        )}
       >
         <span>{r.account.name}</span>
         <span className="tabular-nums">
@@ -1203,7 +1301,9 @@ function ReconcileTab({
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <section className={cn(CARD, "space-y-1.5 p-4")}>
-        <h3 className="text-foreground mb-2 text-sm font-semibold">{t("spending:reconcile.title")}</h3>
+        <h3 className="text-foreground mb-2 text-sm font-semibold">
+          {t("spending:reconcile.title")}
+        </h3>
         {line(t("spending:reconcile.liquidity"), data.liquidity, { strong: true })}
         {line(t("spending:reconcile.cardDebt"), data.cardDebt, { minus: true })}
         {line(t("spending:reconcile.msiRemaining"), data.msiRemaining, { minus: true })}
@@ -1214,7 +1314,7 @@ function ReconcileTab({
             cls: ok ? "text-success" : "text-destructive",
           })}
         </div>
-        <p className="text-muted-foreground pt-1 text-2xs">
+        <p className="text-muted-foreground text-2xs pt-1">
           {ok ? t("spending:reconcile.okHint") : t("spending:reconcile.offHint")}
         </p>
         <div className="flex items-center gap-2 pt-2">
@@ -1226,25 +1326,40 @@ function ReconcileTab({
             onChange={(e) => setTolerance(e.target.value)}
             className="h-7 w-24 text-end text-xs"
           />
-          <Button size="sm" variant="outline" onClick={() => saveTolerance.mutate()} disabled={saveTolerance.isPending}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => saveTolerance.mutate()}
+            disabled={saveTolerance.isPending}
+          >
             {t("common:save")}
           </Button>
         </div>
       </section>
       <section className={cn(CARD, "space-y-1.5 p-4")}>
-        <h3 className="text-foreground mb-2 text-sm font-semibold">{t("spending:reconcile.float")}</h3>
+        <h3 className="text-foreground mb-2 text-sm font-semibold">
+          {t("spending:reconcile.float")}
+        </h3>
         {line(t("spending:reconcile.liquidity"), data.liquidity)}
-        {line(t("spending:reconcile.taxEnvelope"), data.liquidity - data.float - data.cardDebt, { minus: true })}
+        {line(t("spending:reconcile.taxEnvelope"), data.liquidity - data.float - data.cardDebt, {
+          minus: true,
+        })}
         {line(t("spending:reconcile.cardDebt"), data.cardDebt, { minus: true })}
         {line(t("spending:reconcile.float"), data.float, { strong: true })}
       </section>
       <section className={cn(CARD, "space-y-1 p-4")}>
-        <h3 className="text-foreground mb-2 text-sm font-semibold">{t("spending:reconcile.liquidity")}</h3>
+        <h3 className="text-foreground mb-2 text-sm font-semibold">
+          {t("spending:reconcile.liquidity")}
+        </h3>
         {rows(data.cash)}
-        <p className="text-muted-foreground pt-1 text-2xs">{t("spending:reconcile.excludedHint")}</p>
+        <p className="text-muted-foreground text-2xs pt-1">
+          {t("spending:reconcile.excludedHint")}
+        </p>
       </section>
       <section className={cn(CARD, "space-y-1 p-4")}>
-        <h3 className="text-foreground mb-2 text-sm font-semibold">{t("spending:reconcile.cardDebt")}</h3>
+        <h3 className="text-foreground mb-2 text-sm font-semibold">
+          {t("spending:reconcile.cardDebt")}
+        </h3>
         {rows(data.cards)}
       </section>
       <div className="lg:col-span-2">

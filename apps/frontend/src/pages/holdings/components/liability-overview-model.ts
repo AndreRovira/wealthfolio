@@ -70,10 +70,7 @@ export function liabilityCardModel(
     payments:
       original && instalments > 0 && balanceAvailable
         ? {
-            made: Math.max(
-              0,
-              Math.min(instalments, Math.round((original - balance) / instalment)),
-            ),
+            made: Math.max(0, Math.min(instalments, Math.round((original - balance) / instalment))),
             total: instalments,
           }
         : null,

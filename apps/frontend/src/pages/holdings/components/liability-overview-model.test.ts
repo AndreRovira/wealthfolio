@@ -125,7 +125,9 @@ it("counts instalments paid on an interest-free plan", () => {
   });
   expect(liabilityCardModel(holding(msi, card, "41749.05"), today).payments?.made).toBe(0);
   // Interest-bearing or manually tracked loans keep their type label.
-  expect(liabilityCardModel(holding(mortgage, { sub_type: "mortgage" }), today).payments).toBeNull();
+  expect(
+    liabilityCardModel(holding(mortgage, { sub_type: "mortgage" }), today).payments,
+  ).toBeNull();
   expect(liabilityCardModel(holding(autoLoan), today).payments).toBeNull();
 });
 
