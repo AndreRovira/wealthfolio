@@ -431,9 +431,17 @@ async fn a_tagged_withdrawal_lowers_the_loan_in_holdings_and_in_actions() {
 #[tokio::test]
 async fn a_tag_on_a_withdrawal_that_does_not_qualify_is_ignored() {
     let loan = fixture().await;
-    loan.add_account("card", "CREDIT_CARD");
+    // Fork: card withdrawals pay loans (MSI), so a brokerage account is the one
+    // that cannot.
+    loan.add_account("broker", "SECURITIES");
     let before = loan.holding_balance();
-    loan.add_withdrawal("card-pay", "card", "2026-03-01", "600", Some("mortgage"));
+    loan.add_withdrawal(
+        "broker-pay",
+        "broker",
+        "2026-03-01",
+        "600",
+        Some("mortgage"),
+    );
     assert_eq!(loan.holding_balance(), before);
 }
 
@@ -507,12 +515,13 @@ async fn linking_a_withdrawal_makes_it_a_payment_and_unlinking_undoes_it() {
 #[tokio::test]
 async fn a_withdrawal_that_cannot_pay_the_loan_is_not_linked() {
     let loan = fixture().await;
-    loan.add_account("card", "CREDIT_CARD");
-    loan.add_withdrawal("card-pay", "card", "2026-03-01", "600", None);
+    // Fork: card withdrawals pay loans (MSI); a brokerage account cannot.
+    loan.add_account("broker", "SECURITIES");
+    loan.add_withdrawal("broker-pay", "broker", "2026-03-01", "600", None);
     let refused = loan
         .service
         .link_loan_payment(
-            "card-pay",
+            "broker-pay",
             PaymentLink::Link {
                 loan_id: "mortgage".into(),
                 escrow: None,
@@ -524,7 +533,7 @@ async fn a_withdrawal_that_cannot_pay_the_loan_is_not_linked() {
         .unwrap_err();
     assert_eq!(refused.to_string(), "LOAN_PAYMENT_NOT_ELIGIBLE");
     assert!(loan
-        .activity_metadata("card-pay")
+        .activity_metadata("broker-pay")
         .get("loan_payment")
         .is_none());
 }
