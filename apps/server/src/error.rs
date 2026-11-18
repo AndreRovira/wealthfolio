@@ -112,6 +112,11 @@ impl IntoResponse for ApiError {
                         SpendingError::NotFound { .. } | SpendingError::ActivityNotFound => {
                             PublicError::new("not_found", "The requested item was not found.")
                         }
+                        // Fork refusals carry no user data (ids and settings only).
+                        SpendingError::Refused { message } => PublicError {
+                            error_code: "invalid_input".into(),
+                            message: message.clone(),
+                        },
                         _ => PublicError::invalid_input(),
                     }
                 } else {
@@ -154,7 +159,9 @@ impl IntoResponse for ApiError {
                         SpendingError::EventTypeInUse { .. } => StatusCode::CONFLICT,
                         SpendingError::InvalidEventRange => StatusCode::BAD_REQUEST,
                         SpendingError::GlobalRuleHasAccount => StatusCode::BAD_REQUEST,
-                        SpendingError::InvalidInput { .. } => StatusCode::BAD_REQUEST,
+                        SpendingError::InvalidInput { .. } | SpendingError::Refused { .. } => {
+                            StatusCode::BAD_REQUEST
+                        }
                         SpendingError::NotFound { .. } | SpendingError::ActivityNotFound => {
                             StatusCode::NOT_FOUND
                         }
@@ -290,6 +297,31 @@ mod tests {
                 assert!(!String::from_utf8_lossy(&body).contains(private));
             }
         }
+    }
+
+    #[tokio::test]
+    async fn fork_refusals_keep_their_message_and_upstream_input_errors_stay_generic() {
+        use wealthfolio_spending::error::SpendingError;
+        let body_of = |error: SpendingError| async {
+            let response = ApiError::Anyhow(anyhow::Error::new(error)).into_response();
+            assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+            let body = axum::body::to_bytes(response.into_body(), 4096)
+                .await
+                .unwrap();
+            serde_json::from_slice::<serde_json::Value>(&body).unwrap()
+        };
+        let refused = body_of(SpendingError::Refused {
+            message: "deposit a1 is already funded".into(),
+        })
+        .await;
+        assert_eq!(refused["errorCode"], "invalid_input");
+        assert_eq!(refused["message"], "deposit a1 is already funded");
+        let invalid = body_of(SpendingError::InvalidInput {
+            message: PRIVATE.into(),
+        })
+        .await;
+        assert_eq!(invalid["errorCode"], "invalid_input");
+        assert!(!invalid["message"].as_str().unwrap().contains("FAKE-KEY"));
     }
 
     #[tokio::test]

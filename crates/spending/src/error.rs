@@ -23,6 +23,11 @@ pub enum SpendingError {
     #[error("Invalid input: {message}")]
     InvalidInput { message: String },
 
+    /// Fork: a refusal written by the envelope and MSI services. Its text
+    /// names only ids and settings, so the server passes it to the UI as is.
+    #[error("{message}")]
+    Refused { message: String },
+
     /// Requested spending entity does not exist.
     #[error("{entity} not found: {id}")]
     NotFound { entity: &'static str, id: String },
@@ -38,7 +43,7 @@ pub enum SpendingError {
 /// answers it with 400 where a plain `anyhow!` would read as a 500.
 macro_rules! refuse {
     ($($arg:tt)*) => {
-        anyhow::Error::new($crate::error::SpendingError::InvalidInput {
+        anyhow::Error::new($crate::error::SpendingError::Refused {
             message: format!($($arg)*),
         })
     };
