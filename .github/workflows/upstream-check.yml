@@ -28,7 +28,7 @@ jobs:
           base=$(git describe --tags --abbrev=0 --match 'v*' $(git merge-base HEAD upstream/main))
           latest=$(git tag -l 'v*' --sort=-v:refname | grep -v -- '-' | head -1)
           [ "$base" = "$latest" ] && { echo "tailored is on $base, nothing new"; exit 0; }
-          body=$(printf 'tailored is based on %s, newest upstream release is %s.\n\nRebase: `git rebase --onto %s %s tailored`\n\nRelease notes: https://github.com/afadil/wealthfolio/releases/tag/%s' "$base" "$latest" "$latest" "$base" "$latest")
+          body=$(printf 'tailored is based on %s, newest upstream release is %s.\n\nMerge (not rebase): `git switch -c merge/%s tailored && git merge %s`\n\nRelease notes: https://github.com/afadil/wealthfolio/releases/tag/%s' "$base" "$latest" "$latest" "$latest" "$latest")
           n=$(gh issue list --label upstream --state open --json number --jq '.[0].number')
           if [ -n "$n" ]; then gh issue edit "$n" --title "Upstream $latest available" --body "$body";
           else gh issue create --label upstream --title "Upstream $latest available" --body "$body"; fi
