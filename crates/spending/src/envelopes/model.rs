@@ -42,6 +42,9 @@ pub struct EnvelopeBill {
     pub archived: bool,
     /// Next date the bill must be paid; a registered payment moves it one cycle.
     pub next_due: Option<NaiveDate>,
+    /// Monthly charges the bank splits one payment into (an annual fee billed
+    /// over three statements); the last one, on the due date, settles it.
+    pub parts: i32,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -56,6 +59,9 @@ pub struct EnvelopeBillInput {
     pub archived: Option<bool>,
     #[serde(default)]
     pub next_due: Option<NaiveDate>,
+    /// Omitted: 1 on create, unchanged on update.
+    #[serde(default)]
+    pub parts: Option<i32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

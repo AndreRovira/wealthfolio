@@ -2,7 +2,7 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
-use chrono::{Datelike, Duration, NaiveDate, TimeZone, Utc};
+use chrono::{Datelike, Duration, Months, NaiveDate, TimeZone, Utc};
 use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
 use rust_decimal::Decimal;
 use uuid::Uuid;
@@ -259,6 +259,7 @@ impl EnvelopeService {
         if let Some(cycle) = &input.cycle {
             require_cycle(cycle)?;
         }
+        require_parts(input.parts, input.cycle.as_deref().unwrap_or("monthly"))?;
         self.repo.create_bill(input).await
     }
     pub async fn update_bill(&self, id: &str, input: EnvelopeBillInput) -> Result<EnvelopeBill> {
@@ -266,15 +267,21 @@ impl EnvelopeService {
         if let Some(cycle) = &input.cycle {
             require_cycle(cycle)?;
         }
-        // The pot is (envelope, bill): entries and pins filed under the old
-        // envelope would not follow the bill to a new one.
-        if self
+        let stored = self
             .repo
             .list_bills()
             .await?
-            .iter()
-            .any(|b| b.id == id && b.envelope_id != input.envelope_id)
-        {
+            .into_iter()
+            .find(|b| b.id == id);
+        if let Some(bill) = &stored {
+            require_parts(
+                input.parts.or(Some(bill.parts)),
+                input.cycle.as_deref().unwrap_or(&bill.cycle),
+            )?;
+        }
+        // The pot is (envelope, bill): entries and pins filed under the old
+        // envelope would not follow the bill to a new one.
+        if stored.is_some_and(|b| b.envelope_id != input.envelope_id) {
             return Err(refuse!(
                 "a bill stays in its envelope: create it in the other one and move the money"
             ));
@@ -778,7 +785,8 @@ impl EnvelopeService {
             let (Some(flows), Some(next)) = (bill_flows.get(&key), bill.next_due) else {
                 continue;
             };
-            let Some(paid) = settling_payment(dec(bill.expected_amount), next, flows) else {
+            let Some(paid) = settling_payment(dec(bill.expected_amount), next, bill.parts, flows)
+            else {
                 continue;
             };
             let advanced = advance_due(next, cycle_months(&bill.cycle), paid, bill.due_day);
@@ -1340,6 +1348,17 @@ fn require_cycle(cycle: &str) -> Result<()> {
     }
 }
 
+/// A bill in parts takes one charge a month, so a cycle holds at most that many.
+fn require_parts(parts: Option<i32>, cycle: &str) -> Result<()> {
+    let months = cycle_months(cycle) as i32;
+    match parts {
+        Some(n) if !(1..=months).contains(&n) => Err(refuse!(
+            "parts must be between 1 and the cycle's {months} month(s), got {n}"
+        )),
+        _ => Ok(()),
+    }
+}
+
 /// Cycle length in months from the stored label.
 pub fn cycle_months(cycle: &str) -> u32 {
     match cycle.trim() {
@@ -1493,21 +1512,35 @@ fn relink_adjustments(
 /// The date of the payment that settles `next_due`: the latest charge in its
 /// window, once the charges there (refunds netted) reach PAYMENT_MIN_SHARE of
 /// the expected amount. A bill with no expected amount settles on any charge.
+/// A bill in `parts` also counts the earlier monthly parts, but settles only
+/// on a charge in the last part's window, never on an earlier part.
 // ponytail: a second charge that lands after the first already settled the
-// bill leaves the pot negative until it is funded again; hold the sweep for
-// the window's end if bills ever get paid in parts.
+// bill leaves the pot negative until it is funded again; a bill the bank
+// splits declares its `parts`, hold the sweep for the window's end if
+// undeclared split payments ever show up.
 fn settling_payment(
     expected: Decimal,
     next_due: NaiveDate,
+    parts: i32,
     flows: &[(NaiveDate, Decimal)],
 ) -> Option<NaiveDate> {
     let window = next_due - Duration::days(PAYMENT_WINDOW_DAYS);
-    let near = || flows.iter().filter(|(date, _)| *date >= window);
-    let paid: Decimal = near().map(|(_, amount)| *amount).sum();
+    let earlier = u32::try_from(parts.max(1) - 1).unwrap_or(0);
+    let first = next_due
+        .checked_sub_months(Months::new(earlier))
+        .unwrap_or(next_due)
+        - Duration::days(PAYMENT_WINDOW_DAYS);
+    let paid: Decimal = flows
+        .iter()
+        .filter(|(date, _)| *date >= first)
+        .map(|(_, amount)| *amount)
+        .sum();
     if paid <= Decimal::ZERO || paid < expected * dec(PAYMENT_MIN_SHARE) {
         return None;
     }
-    near()
+    flows
+        .iter()
+        .filter(|(date, _)| *date >= window)
         .filter(|(_, amount)| *amount > Decimal::ZERO)
         .map(|(date, _)| *date)
         .max()
@@ -2200,6 +2233,7 @@ mod tests {
             sort_order: 0,
             archived,
             next_due: None,
+            parts: 1,
         };
         let line = |env: &str, bill: Option<&str>, amount: Option<f64>, source: Option<&str>| {
             FundingSplit {
@@ -2332,18 +2366,58 @@ mod tests {
     }
 
     #[test]
+    fn a_bill_in_parts_settles_on_its_last_part() {
+        let day = |m, d| NaiveDate::from_ymd_opt(2026, m, d).unwrap();
+        let due = day(12, 26);
+        // An annual fee over three statements, VAT on the last one.
+        let parts = [
+            (day(10, 26), dec(249.33)),
+            (day(11, 25), dec(249.33)),
+            (day(12, 26), dec(369.01)),
+        ];
+        // Two parts already pass half the fee, but only the last one settles it.
+        assert_eq!(settling_payment(dec(867.84), due, 3, &parts[..2]), None);
+        assert_eq!(
+            settling_payment(dec(867.84), due, 3, &parts),
+            Some(day(12, 26))
+        );
+        // The first part was charged before the envelopes started.
+        assert_eq!(
+            settling_payment(dec(867.84), due, 3, &parts[1..]),
+            Some(day(12, 26))
+        );
+        // Counted as one part, the last charge alone is too small.
+        assert_eq!(settling_payment(dec(867.84), due, 1, &parts), None);
+        // A charge before the first part belongs to the previous cycle.
+        assert_eq!(
+            settling_payment(
+                dec(867.84),
+                due,
+                3,
+                &[(day(10, 15), dec(600.0)), (day(12, 26), dec(10.0))]
+            ),
+            None
+        );
+        assert!(require_parts(Some(3), "yearly").is_ok());
+        assert!(require_parts(Some(2), "monthly").is_err());
+        assert!(require_parts(Some(0), "yearly").is_err());
+        assert!(require_parts(None, "monthly").is_ok());
+    }
+
+    #[test]
     fn a_bill_settles_on_a_real_payment_and_hands_over_its_leftover() {
         let day = |d| NaiveDate::from_ymd_opt(2026, 11, d).unwrap();
         let due = day(20);
         // A fee on the bill's category is not its payment; half the amount is.
         assert_eq!(
-            settling_payment(dec(1000.0), due, &[(day(12), dec(30.0))]),
+            settling_payment(dec(1000.0), due, 1, &[(day(12), dec(30.0))]),
             None
         );
         assert_eq!(
             settling_payment(
                 dec(1000.0),
                 due,
+                1,
                 &[(day(12), dec(30.0)), (day(18), dec(900.0))]
             ),
             Some(day(18))
@@ -2351,19 +2425,20 @@ mod tests {
         // A charge before the window belongs to the previous due date, and a
         // refund takes back what it undid.
         assert_eq!(
-            settling_payment(dec(1000.0), due, &[(day(9), dec(1000.0))]),
+            settling_payment(dec(1000.0), due, 1, &[(day(9), dec(1000.0))]),
             None
         );
         assert_eq!(
             settling_payment(
                 dec(1000.0),
                 due,
+                1,
                 &[(day(15), dec(900.0)), (day(16), dec(-900.0))]
             ),
             None
         );
         assert_eq!(
-            settling_payment(dec(0.0), due, &[(day(15), dec(5.0))]),
+            settling_payment(dec(0.0), due, 1, &[(day(15), dec(5.0))]),
             Some(day(15))
         );
 
@@ -2377,6 +2452,7 @@ mod tests {
             sort_order: 0,
             archived: false,
             next_due: Some(due),
+            parts: 1,
         };
         let legs = sweep_entries(&bill, "investment", day(18), 100.0);
         let pot = |e: &NewEnvelopeEntry| (e.envelope_id.clone(), e.bill_id.clone(), e.amount);

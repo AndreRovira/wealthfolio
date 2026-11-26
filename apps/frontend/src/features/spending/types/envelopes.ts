@@ -33,6 +33,8 @@ export interface EnvelopeBill {
   archived: boolean;
   /** YYYY-MM-DD; a registered payment moves it one cycle. */
   nextDue: string | null;
+  /** Monthly charges one payment is split into; the last one settles the bill. */
+  parts: number;
 }
 
 export interface EnvelopeBillInput {
@@ -44,6 +46,7 @@ export interface EnvelopeBillInput {
   sortOrder?: number;
   archived?: boolean;
   nextDue?: string | null;
+  parts?: number;
 }
 
 export interface EnvelopeCategoryLink {

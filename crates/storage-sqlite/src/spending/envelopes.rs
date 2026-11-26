@@ -83,6 +83,7 @@ struct BillDB {
     created_at: String,
     updated_at: String,
     next_due: Option<String>,
+    parts: i32,
 }
 impl From<BillDB> for EnvelopeBill {
     fn from(r: BillDB) -> Self {
@@ -96,6 +97,7 @@ impl From<BillDB> for EnvelopeBill {
             sort_order: r.sort_order,
             archived: r.archived != 0,
             next_due: r.next_due.as_deref().map(date),
+            parts: r.parts,
         }
     }
 }
@@ -327,6 +329,7 @@ impl EnvelopeRepositoryTrait for EnvelopeRepository {
             created_at: ts.clone(),
             updated_at: ts,
             next_due: input.next_due.map(|d| d.to_string()),
+            parts: input.parts.unwrap_or(1),
         };
         let out = row.clone();
         self.writer
@@ -368,10 +371,14 @@ impl EnvelopeRepositoryTrait for EnvelopeRepository {
                 if let Some(v) = input.next_due {
                     row.next_due = Some(v.to_string());
                 }
+                if let Some(v) = input.parts {
+                    row.parts = v;
+                }
                 row.updated_at = now();
                 diesel::update(envelope_bills::table.find(&id))
                     .set((
                         envelope_bills::next_due.eq(&row.next_due),
+                        envelope_bills::parts.eq(row.parts),
                         envelope_bills::envelope_id.eq(&row.envelope_id),
                         envelope_bills::name.eq(&row.name),
                         envelope_bills::expected_amount.eq(&row.expected_amount),
@@ -727,6 +734,7 @@ mod tests {
                 sort_order: None,
                 archived: None,
                 next_due: None,
+                parts: None,
             })
             .await
             .unwrap();
@@ -791,6 +799,7 @@ mod tests {
                 sort_order: None,
                 archived: None,
                 next_due: Some(day(5)),
+                parts: Some(3),
             })
             .await
             .unwrap();
@@ -814,6 +823,7 @@ mod tests {
             .unwrap());
 
         assert_eq!(repo.list_bills().await.unwrap()[0].next_due, Some(day(28)));
+        assert_eq!(repo.list_bills().await.unwrap()[0].parts, 3);
         assert_eq!(repo.list_entries(None, None).await.unwrap().len(), 1);
     }
 }

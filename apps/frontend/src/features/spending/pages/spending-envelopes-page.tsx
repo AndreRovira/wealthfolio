@@ -58,7 +58,7 @@ import {
 } from "../hooks/use-envelopes";
 import { useSpendingSettings } from "../hooks/use-spending-settings";
 import { SPENDING_THEME, tint } from "../lib/theme";
-import { billLastPaid, billShares } from "../lib/bill-cycle";
+import { billLastPaid, billShares, cycleMonths } from "../lib/bill-cycle";
 import {
   SOURCE_BILL,
   type EnvelopeBalance,
@@ -896,7 +896,10 @@ function BillDialog({
   const [amount, setAmount] = useState(bill ? String(bill.expectedAmount) : "");
   const [nextDue, setNextDue] = useState(bill?.nextDue ?? "");
   const [cycle, setCycle] = useState(bill?.cycle ?? "monthly");
+  const [parts, setParts] = useState(bill?.parts ?? 1);
   const [opening, setOpening] = useState("");
+  // One charge a month at most, so a cycle holds that many parts (12 shown).
+  const maxParts = Math.min(cycleMonths(cycle), 12);
 
   const save = async () => {
     const input = {
@@ -913,6 +916,7 @@ function BillDialog({
             : null,
       cycle,
       nextDue: nextDue || null,
+      parts: Math.min(parts, maxParts),
     };
     if (bill) {
       await m.updateBill.mutateAsync({ id: bill.id, input });
@@ -971,6 +975,21 @@ function BillDialog({
               />
             </Field>
           </div>
+          {maxParts > 1 && (
+            <Field label={t("spending:envelopes.parts")}>
+              <ResponsiveSelect
+                value={String(Math.min(parts, maxParts))}
+                onValueChange={(v) => setParts(Number(v))}
+                options={Array.from({ length: maxParts }, (_, i) => ({
+                  value: String(i + 1),
+                  label:
+                    i === 0
+                      ? t("spending:envelopes.partsOne")
+                      : t("spending:envelopes.partsMany", { count: i + 1 }),
+                }))}
+              />
+            </Field>
+          )}
           {!bill && (
             <Field label={t("spending:envelopes.openingBalance")}>
               <Input
