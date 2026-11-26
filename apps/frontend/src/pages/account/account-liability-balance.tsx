@@ -4,7 +4,8 @@ import { useTranslation } from "react-i18next";
 import type { DateRange } from "react-day-picker";
 
 import { HistoryChart, type HistoryChartData } from "@/components/history-chart";
-import { useNetWorthHistory } from "@/hooks/use-alternative-assets";
+import { useAlternativeHoldings, useNetWorthHistory } from "@/hooks/use-alternative-assets";
+import type { AlternativeAssetHolding } from "@/lib/types";
 import type { TimePeriod } from "@/lib/types";
 import {
   Card,
@@ -18,6 +19,14 @@ import {
 
 /** Net worth keys a credit card's owed balance by this prefix plus the account id. */
 const CREDIT_CARD_KEY_PREFIX = "CREDIT_CARD:";
+
+/** The card an MSI loan bills to: nested for converted charges, flat for loans opted in later. */
+function msiCardId(holding: AlternativeAssetHolding): string | undefined {
+  const meta = holding.metadata;
+  const nested = (meta?.msi as { cardAccountId?: unknown } | undefined)?.cardAccountId;
+  const id = nested ?? meta?.msi_card_account_id;
+  return typeof id === "string" ? id : undefined;
+}
 
 /**
  * Balance owed and its history for a card or other liability account. These
@@ -56,6 +65,16 @@ export function AccountLiabilityBalance({
     return first > 0 ? points.slice(first) : points;
   }, [accountId, data]);
   const latest = chartData[chartData.length - 1];
+  // MSI not billed yet lives in its loans, not in the card; shown beside the
+  // balance owed so the card reads like the bank's total, net worth untouched.
+  const { data: holdings } = useAlternativeHoldings();
+  const msiPending = useMemo(
+    () =>
+      (holdings ?? [])
+        .filter((h) => h.kind === "liability" && msiCardId(h) === accountId)
+        .reduce((sum, h) => sum + Math.max(0, Number(h.marketValue)), 0),
+    [holdings, accountId],
+  );
 
   return (
     <Card className="mb-4 overflow-hidden">
@@ -71,6 +90,23 @@ export function AccountLiabilityBalance({
               <PrivacyAmount value={latest.totalValue} currency={latest.currency} />
             )}
           </p>
+          {latest && msiPending > 0 && (
+            <div className="text-muted-foreground mt-1 flex flex-wrap gap-x-4 text-xs font-normal">
+              <span>
+                {t("account:msi_pending")}{" "}
+                <PrivacyAmount value={msiPending} currency={latest.currency} />
+              </span>
+              <span>
+                {t("account:total_with_msi")}{" "}
+                <span className="text-foreground font-semibold">
+                  <PrivacyAmount
+                    value={latest.totalValue + msiPending}
+                    currency={latest.currency}
+                  />
+                </span>
+              </span>
+            </div>
+          )}
         </CardTitle>
       </CardHeader>
       <CardContent className="p-0">

@@ -103,6 +103,8 @@
   "actions_update_holdings": "更新持有部位",
   "balance_label": "餘額",
   "balance_owed": "應付餘額",
+  "msi_pending": "剩餘分期",
+  "total_with_msi": "含分期合計",
   "book_value": "帳面價值",
   "period_pnl": "期間損益",
   "all_time_return": "全期報酬",

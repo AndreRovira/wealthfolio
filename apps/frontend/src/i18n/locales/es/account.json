@@ -103,6 +103,8 @@
   "actions_update_holdings": "Actualizar posiciones",
   "balance_label": "Saldo",
   "balance_owed": "Saldo adeudado",
+  "msi_pending": "MSI pendiente",
+  "total_with_msi": "Total con MSI",
   "book_value": "Valor contable",
   "period_pnl": "G/P del periodo",
   "all_time_return": "Rentabilidad histórica",
