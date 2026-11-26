@@ -76,8 +76,15 @@ const QuantityInput = React.forwardRef<HTMLInputElement, QuantityInputProps>(
         maximumFractionDigits: 2,
         useGrouping: false,
       });
+    // A form library may answer a cleared field with its default value
+    // (react-hook-form does for `undefined`), so keep the field empty while the
+    // parent echoes the value it sent right after the user cleared it.
+    // ponytail: a programmatic reset to that echoed number while empty stays empty.
+    const [cleared, setCleared] = React.useState<false | "pending" | { echo: typeof value }>(false);
+    if (cleared === "pending") setCleared({ echo: value });
+    const showEmpty = cleared === "pending" || (cleared !== false && cleared.echo === value);
     // Normalize value to number or empty string
-    const numericValue = value === null || value === undefined || value === "" ? "" : Number(value);
+    const numericValue = showEmpty || value === null || value === undefined || value === "" ? "" : Number(value);
 
     return (
       <NumericFormat
@@ -101,7 +108,10 @@ const QuantityInput = React.forwardRef<HTMLInputElement, QuantityInputProps>(
         allowedDecimalSeparators={Array.from(new Set([formatting.decimalSeparator, ".", ","]))}
         valueIsNumericString={false}
         value={numericValue}
-        onValueChange={(values) => {
+        onValueChange={(values, sourceInfo) => {
+          if (String(sourceInfo?.source) === "event") {
+            setCleared(values.floatValue === undefined ? "pending" : false);
+          }
           // Prefer onValueChange if provided
           if (onValueChange) {
             onValueChange(values.floatValue);
