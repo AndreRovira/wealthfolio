@@ -258,17 +258,18 @@ export async function selectActivityType(page: Page, type: string) {
   await page.waitForTimeout(200);
 }
 
-// A select mounts its options, hidden, once its trigger has had focus, and a
-// select that just closed keeps showing them while it animates out, so options are
-// looked up in the open popup.
-const OPEN_SELECT = '[data-slot="select-content"][data-open]';
+// An account picker that just closed keeps showing its options while it
+// animates out, so options are looked up in the open popup, and a pick waits
+// for the closing popup to leave before the next field opens its own list.
+const OPEN_ACCOUNT_LIST = '[data-slot="popover-content"][data-open]';
+const ACCOUNT_LIST = '[data-slot="popover-content"]:has([data-testid="account-option"])';
 
 export async function selectFirstAccount(page: Page) {
   await page.getByTestId("account-select").click();
-  const option = page.locator(OPEN_SELECT).getByTestId("account-option").first();
+  const option = page.locator(OPEN_ACCOUNT_LIST).getByTestId("account-option").first();
   await expect(option).toBeVisible({ timeout: 5000 });
   await option.click();
-  await page.waitForTimeout(200);
+  await expect(page.locator(ACCOUNT_LIST)).toHaveCount(0);
 }
 
 function cssAttributeValue(value: string) {
@@ -283,7 +284,7 @@ export async function selectAccountOption(
 ) {
   await accountSelect.click();
   const option = page
-    .locator(OPEN_SELECT)
+    .locator(OPEN_ACCOUNT_LIST)
     .locator(
       `[data-testid="account-option"][data-account-name="${cssAttributeValue(
         accountName,
@@ -294,6 +295,7 @@ export async function selectAccountOption(
   await option.click();
 
   await expect(accountSelect).toContainText(accountName, { timeout: 5000 });
+  await expect(page.locator(ACCOUNT_LIST)).toHaveCount(0);
 }
 
 export async function searchAndSelectSymbol(page: Page, symbol: string) {

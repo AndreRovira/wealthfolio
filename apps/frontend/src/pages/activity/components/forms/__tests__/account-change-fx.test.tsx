@@ -16,6 +16,18 @@ const adapter = vi.hoisted(() => ({
   logger: { error: vi.fn() },
 }));
 vi.mock("@/adapters", () => adapter);
+
+// jsdom has neither; the account picker's command list uses both.
+if (typeof ResizeObserver === "undefined") {
+  globalThis.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  } as typeof ResizeObserver;
+}
+if (!HTMLElement.prototype.scrollIntoView) {
+  HTMLElement.prototype.scrollIntoView = () => undefined;
+}
 vi.mock("@/hooks/use-settings", () => ({ useSettings: () => ({ data: { baseCurrency: "USD" } }) }));
 vi.mock("@/lib/settings-provider", () => ({
   useSettingsContext: () => ({ settings: { baseCurrency: "USD" } }),

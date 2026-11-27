@@ -18,12 +18,14 @@ vi.mock("@wealthfolio/ui", () => ({
   FormItem: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   FormLabel: ({ children }: { children: React.ReactNode }) => <label>{children}</label>,
   FormMessage: () => null,
-  Select: ({
-    children,
+  Icons: { ChevronDown: () => null },
+}));
+
+vi.mock("@/features/spending/components/account-picker", () => ({
+  AccountPicker: ({
     value,
     onValueChange,
   }: {
-    children: React.ReactNode;
     value?: string;
     onValueChange?: (value: string) => void;
   }) => (
@@ -31,15 +33,8 @@ vi.mock("@wealthfolio/ui", () => ({
       <button type="button" onClick={() => onValueChange?.("acc-usd")}>
         Choose USD account
       </button>
-      {children}
     </div>
   ),
-  SelectContent: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  SelectItem: ({ children, value }: { children: React.ReactNode; value: string }) => (
-    <div data-value={value}>{children}</div>
-  ),
-  SelectTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  SelectValue: ({ placeholder }: { placeholder?: string }) => <span>{placeholder}</span>,
 }));
 
 interface FormValues {

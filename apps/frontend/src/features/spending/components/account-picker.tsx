@@ -16,6 +16,8 @@ import {
 export interface AccountPickerOption {
   value: string;
   label: string;
+  /** Extra attributes for the option, such as test hooks. */
+  itemProps?: Record<`data-${string}`, string>;
 }
 
 /**
@@ -28,12 +30,14 @@ export function AccountPicker({
   value,
   onValueChange,
   trigger,
+  searchPlaceholder,
 }: {
   options: AccountPickerOption[];
   value: string;
   onValueChange: (value: string) => void;
   /** The field button; receives the popover trigger props. */
   trigger: ReactElement;
+  searchPlaceholder?: string;
 }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
@@ -65,13 +69,14 @@ export function AccountPicker({
           <CommandInput
             value={search}
             onValueChange={setSearch}
-            placeholder={t("spending:cashForm.selectAccount")}
+            placeholder={searchPlaceholder ?? t("spending:cashForm.selectAccount")}
           />
           <CommandList>
             <CommandEmpty>{t("common:no_results_found", "No results found.")}</CommandEmpty>
             {options.map((option) => (
               <CommandItem
                 key={option.value}
+                {...option.itemProps}
                 value={option.label}
                 onSelect={() => {
                   onValueChange(option.value);
